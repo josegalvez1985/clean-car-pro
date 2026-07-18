@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Car,
-  Droplets,
+  Download,
   LogOut,
   Moon,
   Plus,
@@ -31,6 +31,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
+import { AquaBackground } from "@/components/aqua-background";
+import { usePwaInstall } from "@/lib/use-pwa-install";
+import { IosInstallHint } from "@/components/ios-install-hint";
 
 export const Route = createFileRoute("/home")({
   component: HomePage,
@@ -49,6 +52,7 @@ function HomePage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
+  const { canInstall, install, iosHint, dismissIosHint } = usePwaInstall();
 
   const [patente, setPatente] = useState("");
   const [tipo, setTipo] = useState<VehiculoTipo>("auto");
@@ -93,12 +97,13 @@ function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
+    <div className="relative min-h-screen overflow-hidden bg-background">
+      <AquaBackground subtle />
+      <header className="sticky top-0 z-10 border-b border-border/60 bg-background/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Droplets className="h-5 w-5" />
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl">
+              <img src="/logo.png" alt="Clean Car" className="h-full w-full object-contain" />
             </div>
             <div>
               <h1 className="text-base font-semibold leading-none">Clean Car</h1>
@@ -129,6 +134,11 @@ function HomePage() {
                   </>
                 )}
               </DropdownMenuItem>
+              {canInstall && (
+                <DropdownMenuItem onClick={install}>
+                  <Download className="mr-2 h-4 w-4" /> Instalar app
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleLogout}
@@ -144,7 +154,7 @@ function HomePage() {
       <main className="mx-auto max-w-2xl px-4 py-6">
         <form
           onSubmit={onSubmit}
-          className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm"
+          className="space-y-5 rounded-3xl border border-border/60 bg-card/70 p-6 shadow-xl shadow-primary/10 backdrop-blur-xl"
         >
           <div className="flex items-center gap-2">
             <Plus className="h-4 w-4 text-primary" />
@@ -238,6 +248,8 @@ function HomePage() {
           </Button>
         </form>
       </main>
+
+      <IosInstallHint open={iosHint} onClose={dismissIosHint} />
     </div>
   );
 }

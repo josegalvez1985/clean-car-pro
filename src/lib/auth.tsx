@@ -24,24 +24,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const raw = (() => {
+      try {
+        return localStorage.getItem(STORAGE_KEY);
+      } catch {
+        return null;
+      }
+    })();
+    if (!raw) return;
+
+    let stored: AuthUser;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw));
+      stored = JSON.parse(raw);
     } catch {
-      /* ignore */
+      return;
     }
+
+    // Con API configurada, una sesión sin token no es válida: descartarla.
+    if (!API_BASE_URL) {
+      setUser(stored);
+      return;
+    }
+    if (!stored.token) {
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    fetch(`${API_BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${stored.token}` },
+    })
+      .then((res) => {
+        if (res.ok) setUser(stored);
+        else localStorage.removeItem(STORAGE_KEY); // token expirado/ inválido
+      })
+      .catch(() => {
+        // Sin red: mantener la sesión guardada para no expulsar al usuario.
+        setUser(stored);
+      });
   }, []);
 
   const login = async (username: string, password: string) => {
     setLoading(true);
     try {
       if (API_BASE_URL) {
-        const res = await fetch(`${API_BASE_URL}/login`, {
+        const res = await fetch(`${API_BASE_URL}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password }),
         });
-        if (!res.ok) throw new Error("Usuario o contraseña inválidos");
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(err.error ?? "Usuario o contraseña inválidos");
+        }
         const data = (await res.json().catch(() => ({}))) as {
           token?: string;
           user?: { username?: string };
@@ -53,11 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         setUser(next);
       } else {
-        // Sin API configurada: login local para poder probar la app.
-        if (!username || !password) throw new Error("Ingresá usuario y contraseña");
-        const next: AuthUser = { username };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        setUser(next);
+        throw new Error(
+          "API no configurada (VITE_API_URL). Reiniciá el servidor de desarrollo.",
+        );
       }
     } finally {
       setLoading(false);
@@ -65,6 +96,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    // Invalidar el token en el backend (best-effort; no bloquea el cierre).
+    if (API_BASE_URL && user?.token) {
+      fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: user.token }),
+        keepalive: true,
+      }).catch(() => {
+        /* ignore */
+      });
+    }
     localStorage.removeItem(STORAGE_KEY);
     setUser(null);
   };
