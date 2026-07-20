@@ -110,8 +110,12 @@ END cc_auth;
 
 CREATE OR REPLACE PACKAGE BODY cc_auth AS
 
-  -- >>> CAMBIAR <<< : nombre del workspace APEX (en minúsculas).
-  c_workspace CONSTANT VARCHAR2(255) := 'evamar';
+  -- >>> CAMBIAR <<< : nombre del workspace APEX, tal como lo guarda APEX
+  -- (MAYÚSCULAS). Verificalo con:
+  --   SELECT workspace_name FROM apex_workspaces;
+  -- Si este nombre no coincide, el login devuelve 401 siempre, aun con
+  -- credenciales correctas.
+  c_workspace CONSTANT VARCHAR2(255) := 'EVAMAR';
 
   FUNCTION generar_token RETURN VARCHAR2 IS
   BEGIN
@@ -122,10 +126,10 @@ CREATE OR REPLACE PACKAGE BODY cc_auth AS
     p_usuario  IN VARCHAR2,
     p_password IN VARCHAR2
   ) RETURN BOOLEAN IS
-    l_group_id NUMBER;
   BEGIN
-    l_group_id := APEX_UTIL.FIND_SECURITY_GROUP_ID(p_workspace => c_workspace);
-    APEX_UTIL.SET_SECURITY_GROUP_ID(p_security_group_id => l_group_id);
+    -- set_workspace es obligatorio antes de is_login_password_valid: sin un
+    -- workspace activo la validación devuelve FALSE siempre.
+    APEX_UTIL.SET_WORKSPACE(p_workspace => c_workspace);
     RETURN APEX_UTIL.IS_LOGIN_PASSWORD_VALID(
              p_username => UPPER(p_usuario),
              p_password => p_password

@@ -1,5 +1,16 @@
 # Guía de implementación — Backend Clean Car (ORDS + APEX + JWT)
 
+> **Archivos del backend:**
+> [login.sql](login.sql) — autenticación (módulo `cleancar.api`, endpoints `auth/*`).
+> [servicios.sql](servicios.sql) — servicios del lavadero (`boxes`, `servicios`,
+> `servicios-lavadero`). Se ejecuta **después** de `login.sql`; cuelga del mismo
+> módulo, así que hereda el CORS.
+>
+> Nota: las secciones de abajo describen el diseño con JWT (`cc_jwt`). La
+> implementación real en `login.sql` usa **tokens opacos** en la tabla
+> `CC_TOKENS` y la función es `cc_auth.usuario_desde_bearer`. El patrón para
+> agregar endpoints es el mismo.
+
 Guía de referencia para mantener y **extender** el backend: cómo funciona la
 autenticación, cómo agregar endpoints nuevos (protegidos con el mismo token) y
 cómo depurar. Pensada para que cualquiera pueda sumar features sin releer todo

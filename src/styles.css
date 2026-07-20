@@ -42,6 +42,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -79,6 +83,12 @@
   --accent-foreground: oklch(0.25 0.1 250);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.984 0.003 247.858);
+  /* Estado: verde agua (entregado) y ámbar (en proceso). Separados del
+     acento primario para que el color semántico no compita con lo accionable. */
+  --success: oklch(0.68 0.13 175);
+  --success-foreground: oklch(0.99 0.005 240);
+  --warning: oklch(0.75 0.14 75);
+  --warning-foreground: oklch(0.25 0.06 60);
   --border: oklch(0.9 0.02 240);
   --input: oklch(0.92 0.02 240);
   --ring: oklch(0.55 0.17 240);
@@ -114,6 +124,10 @@
   --accent-foreground: oklch(0.97 0.01 230);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.984 0.003 247.858);
+  --success: oklch(0.75 0.14 172);
+  --success-foreground: oklch(0.16 0.04 250);
+  --warning: oklch(0.8 0.14 78);
+  --warning-foreground: oklch(0.2 0.05 60);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.7 0.16 235);

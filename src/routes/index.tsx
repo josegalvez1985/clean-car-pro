@@ -26,7 +26,7 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { user, login, loading } = useAuth();
+  const { user, login, loading, restaurando } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
@@ -34,8 +34,8 @@ function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (user) navigate({ to: "/home", replace: true });
-  }, [user, navigate]);
+    if (!restaurando && user) navigate({ to: "/home", replace: true });
+  }, [user, restaurando, navigate]);
 
   useEffect(() => {
     const remembered = getRememberedUsername();
@@ -68,9 +68,7 @@ function LoginPage() {
     try {
       await doLogin(username.trim(), password);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Usuario o contraseña incorrectos",
-      );
+      toast.error(err instanceof Error ? err.message : "Usuario o contraseña incorrectos");
     } finally {
       setBusy(false);
     }
@@ -187,10 +185,7 @@ function LoginPage() {
           )}
         </form>
 
-        <InstallButton
-          variant="outline"
-          className="mt-4 w-full bg-card/60 backdrop-blur"
-        />
+        <InstallButton variant="outline" className="mt-4 w-full bg-card/60 backdrop-blur" />
       </div>
     </main>
   );
