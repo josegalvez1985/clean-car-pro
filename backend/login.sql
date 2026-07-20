@@ -378,10 +378,12 @@ PROMPT ============================================================
 PROMPT  4/5  CORS (ajustá los orígenes permitidos)
 PROMPT ============================================================
 BEGIN
-  -- >>> CAMBIAR <<< : orígenes del frontend (Vite local + IP de red + dominio PWA).
+  -- >>> CAMBIAR <<< : orígenes del frontend (GitHub Pages + Vite local + IPs de red).
+  -- Solo esquema+host+puerto, sin path. Las IPs de LAN son para abrir la app
+  -- desde otro dispositivo; si cambian por DHCP hay que actualizarlas acá.
   ords.set_module_origins_allowed(
     p_module_name     => 'cleancar.api',
-    p_origins_allowed => 'http://localhost:8080,http://192.168.100.86:8080'
+    p_origins_allowed => 'https://josegalvez1985.github.io,http://localhost:8080,http://192.168.4.118:8080,http://172.30.144.1:8080'
   );
   COMMIT;
 END;

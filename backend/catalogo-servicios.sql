@@ -418,7 +418,7 @@ END;
 BEGIN
   ORDS.SET_MODULE_ORIGINS_ALLOWED(
     p_module_name     => 'cleancar.api',
-    p_origins_allowed => 'http://localhost:8080,http://192.168.100.86:8080'
+    p_origins_allowed => 'https://josegalvez1985.github.io,http://localhost:8080,http://192.168.4.118:8080,http://172.30.144.1:8080'
   );
   COMMIT;
 END;

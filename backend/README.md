@@ -58,13 +58,18 @@ ORDS debe permitir CORS. Como DBA/ADMIN:
 ```sql
 BEGIN
   ords.set_module_origins_allowed(
-    p_module_name => 'cleancar.auth',
-    p_origins_allowed => 'http://localhost:8080,https://tu-dominio-pwa'
+    p_module_name => 'cleancar.api',
+    p_origins_allowed => 'https://josegalvez1985.github.io,http://localhost:8080'
   );
   COMMIT;
 END;
 /
 ```
+
+Solo esquema+host+puerto, **sin path** (`https://josegalvez1985.github.io`, no
+`.../clean-car-pro/`). Si falta el origen, ORDS responde 403 con
+`failed cross origin request validation` — y al haber lista blanca la validación
+aplica a **toda** request al módulo, así que también falla desde curl/Postman.
 
 ## Conexión desde el frontend
 

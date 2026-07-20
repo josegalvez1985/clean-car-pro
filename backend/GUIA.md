@@ -193,16 +193,17 @@ Cada vez que cambie el dominio del frontend, actualizá los orígenes:
 ```sql
 BEGIN
   ords.set_module_origins_allowed(
-    p_module_name     => 'cleancar.auth',
-    p_origins_allowed => 'http://localhost:8080,https://tu-dominio-pwa'
+    p_module_name     => 'cleancar.api',
+    p_origins_allowed => 'https://josegalvez1985.github.io,http://localhost:8080'
   );
   COMMIT;
 END;
 /
 ```
 
-Sin esto, el navegador bloquea las llamadas con error CORS (aunque el endpoint
-funcione con curl/Postman).
+Sin esto, ORDS rechaza con 403 `failed cross origin request validation`. Ojo:
+al haber lista blanca la validación corre sobre **toda** request al módulo, así
+que el 403 aparece también en curl/Postman, no solo en el navegador.
 
 ---
 
@@ -244,7 +245,7 @@ END;
 | `PLS-00201: DBMS_CRYPTO no declarado`     | Falta `GRANT EXECUTE ON DBMS_CRYPTO TO <schema>` (como DBA).           |
 | Login siempre 401 con credenciales OK     | `c_app_id`/`c_page_id` no coinciden con la app APEX real.             |
 | 404 al llamar el endpoint                 | Schema no habilitado en ORDS, o base_path/patrón mal escrito.         |
-| Error CORS en el navegador (no en curl)   | Falta `set_module_origins_allowed` con el origen del frontend.        |
+| 403 `failed cross origin request validation` | El origen del frontend no está en `set_module_origins_allowed`. Con lista blanca activa falla también desde curl (sin header `Origin`). |
 | `me` da 401 con token recién emitido      | El handler no declara el parámetro `Authorization` (HEADER).          |
 | Todos los tokens dejan de servir          | Se cambió `c_secret` (rotación) → re-login. Esperado.                 |
 | Token no expira a las 12h                 | Revisá `c_ttl_seconds` y que la hora de la BD (UTC) sea correcta.     |
