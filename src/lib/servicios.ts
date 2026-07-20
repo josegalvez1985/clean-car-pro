@@ -118,10 +118,32 @@ export interface DatosServicioLavadero {
   precio: number;
 }
 
-/** `fecha` en formato YYYY-MM-DD filtra ese día; omitida trae todo. */
-export async function listarServiciosLavadero(fecha?: string): Promise<ServicioLavadero[]> {
-  const qs = fecha ? `?fecha=${encodeURIComponent(fecha)}` : "";
-  return lista(await request<Envelope<ServicioLavadero[]>>(`/servicios-lavadero${qs}`));
+/**
+ * Paginado; sin `fechaDesde`/`fechaHasta` trae solo el mes en curso (evita
+ * cargar toda la tabla), salvo `todoElPeriodo: true` (p.ej. "últimos
+ * movimientos" del home, que quiere los N más recientes de cualquier mes).
+ * `total` en la respuesta indica si hay más páginas.
+ */
+export async function listarServiciosLavadero(filtros?: {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  idBox?: number;
+  pagina?: number;
+  tamPagina?: number;
+  todoElPeriodo?: boolean;
+}): Promise<{ data: ServicioLavadero[]; total: number }> {
+  const params = new URLSearchParams();
+  if (filtros?.fechaDesde) params.set("fecha_desde", filtros.fechaDesde);
+  if (filtros?.fechaHasta) params.set("fecha_hasta", filtros.fechaHasta);
+  if (filtros?.idBox) params.set("id_box", String(filtros.idBox));
+  if (filtros?.pagina) params.set("pagina", String(filtros.pagina));
+  if (filtros?.tamPagina) params.set("tam_pagina", String(filtros.tamPagina));
+  if (filtros?.todoElPeriodo) params.set("todo_periodo", "S");
+  const qs = params.size ? `?${params.toString()}` : "";
+  const r = await request<Envelope<ServicioLavadero[]> & { total?: number }>(
+    `/servicios-lavadero${qs}`,
+  );
+  return { data: r.data ?? [], total: r.total ?? 0 };
 }
 
 export async function crearServicioLavadero(datos: DatosServicioLavadero) {

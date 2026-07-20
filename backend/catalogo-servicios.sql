@@ -176,6 +176,10 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
       p_error(401, 'Unauthorized', 'Token invalido o expirado');
       RETURN;
     END IF;
+    IF NOT CC_AUTH.ES_ADMIN(l_usuario) THEN
+      p_error(403, 'Forbidden', 'No tenes permiso para modificar registros');
+      RETURN;
+    END IF;
 
     IF p_descripcion IS NULL THEN
       p_error(400, 'Bad Request', 'La descripcion es obligatoria');
@@ -219,6 +223,10 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
     l_usuario := f_usuario(p_token);
     IF l_usuario IS NULL THEN
       p_error(401, 'Unauthorized', 'Token invalido o expirado');
+      RETURN;
+    END IF;
+    IF NOT CC_AUTH.ES_ADMIN(l_usuario) THEN
+      p_error(403, 'Forbidden', 'No tenes permiso para eliminar registros');
       RETURN;
     END IF;
 

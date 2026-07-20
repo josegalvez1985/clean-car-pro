@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputMonto } from "@/components/ui/input-monto";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -19,6 +20,7 @@ import {
   type Box,
   type Servicio,
 } from "@/lib/servicios";
+import { TicketLavado, type DatosTicket } from "@/components/ticket-lavado";
 
 const COMENTARIO_MAX = 500;
 
@@ -44,6 +46,7 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
   const [precio, setPrecio] = useState("");
   const [comentario, setComentario] = useState("");
   const [saving, setSaving] = useState(false);
+  const [ticket, setTicket] = useState<DatosTicket | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -67,7 +70,8 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
 
   /**
    * Al elegir el servicio se trae su precio de lista (SERVICIOS_LAV.PRECIO),
-   * igual que la acción dinámica de la página 14 de APEX. Queda editable.
+   * igual que la acción dinámica de la página 14 de APEX. A diferencia de
+   * APEX, queda bloqueado: el operador no puede alterar el precio de lista.
    */
   const onServicioChange = (valor: string) => {
     setIdServicio(valor);
@@ -85,14 +89,15 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
       toast.error("Elegí el servicio");
       return;
     }
-    if (!comentario.trim()) {
-      toast.error("La observación es obligatoria");
-      return;
-    }
     if (!precio || Number(precio) <= 0) {
       toast.error("Ingresá un precio válido");
       return;
     }
+
+    const box = boxes.find((b) => String(b.id_box) === idBox);
+    const servicio = servicios.find((s) => String(s.id_servicio) === idServicio);
+    // Sin observación, el backend guarda la descripción del servicio.
+    const comentarioFinal = comentario.trim() || servicio?.descripcion || "";
 
     setSaving(true);
     try {
@@ -104,12 +109,18 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
         precio: Number(precio),
       });
       toast.success("Servicio registrado");
+      setTicket({
+        fecha,
+        box: box?.descripcion ?? "",
+        servicio: servicio?.descripcion ?? "",
+        comentario: comentarioFinal,
+        precio: Number(precio),
+      });
       setIdBox("");
       setIdServicio("");
       setPrecio("");
       setComentario("");
       setFecha(todayISO());
-      onDone?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo registrar el servicio");
     } finally {
@@ -130,6 +141,33 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
       <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
         <p className="font-medium text-destructive">No se pudieron cargar los datos</p>
         <p className="mt-1 text-muted-foreground">{errorCarga}</p>
+      </div>
+    );
+  }
+
+  if (ticket) {
+    return (
+      <div className="space-y-5">
+        <div className="rounded-xl border border-success/30 bg-success/10 p-4 text-sm">
+          <p className="font-medium text-success">Servicio registrado</p>
+          <p className="mt-1 text-muted-foreground">
+            {ticket.servicio} · {ticket.box}
+          </p>
+        </div>
+        <TicketLavado datos={ticket} />
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 flex-1 text-base"
+            onClick={() => window.print()}
+          >
+            <Printer className="mr-1.5 h-4 w-4" /> Imprimir
+          </Button>
+          <Button type="button" className="h-12 flex-1 text-base" onClick={onDone}>
+            Listo
+          </Button>
+        </div>
       </div>
     );
   }
@@ -184,23 +222,20 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
 
       <div className="space-y-2">
         <Label htmlFor="precio">Precio</Label>
-        <Input
+        <InputMonto
           id="precio"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          step="1"
           value={precio}
-          onChange={(e) => setPrecio(e.target.value)}
+          onChange={setPrecio}
           placeholder="0"
-          className="tabular-nums"
+          className="tabular-nums disabled:opacity-100"
+          disabled
           required
         />
       </div>
 
       <div className="space-y-2">
         <div className="flex items-baseline justify-between">
-          <Label htmlFor="comentario">Observación</Label>
+          <Label htmlFor="comentario">Observación (opcional)</Label>
           <span className="text-xs tabular-nums text-muted-foreground">
             {comentario.length}/{COMENTARIO_MAX}
           </span>
@@ -211,8 +246,7 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
           onChange={(e) => setComentario(e.target.value)}
           maxLength={COMENTARIO_MAX}
           rows={3}
-          placeholder="Detalle del servicio"
-          required
+          placeholder="Detalle del servicio (si lo dejás vacío, se usa el nombre del servicio)"
         />
       </div>
 

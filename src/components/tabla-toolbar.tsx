@@ -55,7 +55,7 @@ export function BuscadorTabla({
  * Reemplaza los filtros por columna del Interactive Grid de APEX, que en
  * pantalla de celular no entran.
  */
-export function EncabezadosTabla<T extends Record<string, unknown>>({
+export function EncabezadosTabla<T extends object>({
   columnas,
   campo,
   direccion,

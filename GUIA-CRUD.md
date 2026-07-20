@@ -101,6 +101,7 @@ END;
    | Alta | 201 | `{"success":true,"message":"...","id_x":123}` |
    | Modificación / baja | 200 | `{"success":true,"message":"..."}` |
    | Sin token | 401 | `{"success":false,"message":"..."}` |
+   | Sin permiso (rol) | 403 | `{"success":false,"message":"..."}` |
    | Validación | 400 | `{"success":false,"message":"..."}` |
    | No existe | 404 | `{"success":false,"message":"..."}` |
    | FK que bloquea | 409 | `{"success":false,"message":"..."}` |
@@ -125,6 +126,59 @@ END;
 
 7. **`COMMIT` al final del camino feliz; `ROLLBACK` en el handler de excepción.**
    También `ROLLBACK` antes de un 404 por `SQL%ROWCOUNT = 0`.
+
+8. **`ACTUALIZAR` y `ELIMINAR` verifican el rol después del token, nunca antes**
+   (primero 401 si no hay sesión, después 403 si la sesión no alcanza). La
+   lista de usuarios habilitados vive en un solo lugar,
+   `CC_AUTH.ES_ADMIN` ([backend/login.sql](backend/login.sql)) — nunca se
+   repite `IN ('JOSEG', 'EVAC')` en cada paquete:
+
+   ```sql
+   l_usuario := f_usuario(p_token);
+   IF l_usuario IS NULL THEN
+     p_error(401, 'Unauthorized', 'Token invalido o expirado');
+     RETURN;
+   END IF;
+   IF NOT CC_AUTH.ES_ADMIN(l_usuario) THEN
+     p_error(403, 'Forbidden', 'No tenes permiso para modificar registros');
+     RETURN;
+   END IF;
+   ```
+
+   `LISTAR`, `OBTENER` e `INSERTAR` (el alta) **no** llevan este chequeo —
+   cualquier usuario logueado puede crear y consultar; solo editar/eliminar
+   está restringido. En el cliente, `esAdmin(user)` de
+   [src/lib/auth.tsx](src/lib/auth.tsx) oculta los botones de lápiz/basurero
+   para quien no tiene permiso — es solo UX, la autorización real es el 403
+   del backend.
+
+8. **`LISTAR` de una tabla que crece sin límite (movimientos, ventas, logs)
+   nunca trae todo de una.** Paginar con `OFFSET ... FETCH NEXT` y devolver
+   `total` junto a `data`, así el cliente sabe si hay más:
+
+   ```sql
+   PROCEDURE LISTAR(
+       p_token IN VARCHAR2, p_fecha_desde IN VARCHAR2 DEFAULT NULL,
+       p_fecha_hasta IN VARCHAR2 DEFAULT NULL, p_pagina IN VARCHAR2 DEFAULT NULL,
+       p_tam_pagina IN VARCHAR2 DEFAULT NULL, p_todo_periodo IN VARCHAR2 DEFAULT NULL);
+   ```
+
+   - **Filtro de fecha por defecto = mes en curso** si el caller no pasa
+     `fecha_desde`/`fecha_hasta`. Evita el caso típico de una pantalla de
+     "Consulta"/"Ventas" que sin querer trae años de historial la primera vez
+     que se abre.
+   - **`p_todo_periodo='S'` lo desactiva** para los pocos casos que sí quieren
+     los N registros más recientes sin importar el mes (p.ej. "Últimos
+     movimientos" de una home, que con el filtro de mes mostraría de menos si
+     el mes recién empezó).
+   - `p_pagina` arranca en 1; `p_tam_pagina` con default razonable (30) y tope
+     (200) para que un valor absurdo del cliente no golpee la base.
+   - El `SELECT COUNT(*)` del total usa el mismo `WHERE` que el cursor de la
+     página — repetir el filtro, no factorizarlo en una vista: son dos
+     sentencias independientes y es más fácil ver que están sincronizadas.
+   - En el cliente, el botón **"Mostrar más"** pide la página siguiente y
+     concatena (`setFilas(prev => [...prev, ...nuevas])`); no reemplaza la
+     lista. Ver [src/routes/ventas.tsx](src/routes/ventas.tsx).
 
 ### 1.3 Endpoints ORDS
 
@@ -239,6 +293,12 @@ Reglas:
   que ya agrega el `Authorization: Bearer`, parsea el error y cierra la sesión ante 401/403.
 - **No escribir código defensivo que adivine formatos.** Si el backend cumple el
   contrato, no hace falta.
+- **`LISTAR` paginado** (ver §1.2.8) devuelve `{ data, total }` en vez de
+  `T[]` a secas — el `total` es lo que le permite al cliente decidir si
+  mostrar "Mostrar más". Los filtros van en un objeto con nombres en
+  camelCase (`fechaDesde`, `idBox`) que la función traduce a query params
+  `snake_case` (`fecha_desde`, `id_box`); ver
+  `listarServiciosLavadero` en [src/lib/servicios.ts](src/lib/servicios.ts).
 
 ---
 
@@ -253,7 +313,7 @@ Reglas:
 
 ```
 header sticky: volver + título + contador + botón Nuevo
-main: cargando | error+reintentar | vacío | lista
+main: cargando | error+reintentar | vacío | lista con buscador y encabezados ordenables
 Drawer: formulario de alta/edición
 AlertDialog: confirmación de borrado
 ```
@@ -261,6 +321,31 @@ AlertDialog: confirmación de borrado
 Los cuatro estados —cargando, error, vacío, con datos— **se implementan siempre**.
 El estado de error necesita botón "Reintentar"; el vacío, una acción para crear
 el primer registro.
+
+**Toda lista con datos lleva buscador global + columnas ordenables.** Ya existe
+la infraestructura, no se reimplementa por pantalla:
+
+```tsx
+import { useTabla, type Columna } from "@/lib/use-tabla";
+import { BuscadorTabla, EncabezadosTabla } from "@/components/tabla-toolbar";
+
+const COLUMNAS: Columna<Box>[] = [{ campo: "descripcion", titulo: "Descripción" }];
+// numérica: true en las columnas de importe/cantidad, para alinearlas a la derecha
+
+const { busqueda, setBusqueda, campo, direccion, ordenarPor, resultado } = useTabla(
+  boxes,
+  "descripcion", // campo de orden inicial
+);
+```
+
+- `BuscadorTabla` va **antes** del contenedor de la tarjeta; `EncabezadosTabla`
+  va **dentro**, como primera fila. Se itera `resultado` en el `.map`, nunca el
+  array original — si no, el buscador y el orden no tienen efecto visible.
+- La búsqueda es global (no por columna): concatena todos los campos de la fila,
+  así "lavado 85000" encuentra por descripción y precio a la vez. No pedir al
+  usuario que elija en qué columna buscar.
+- El tipo de la fila (`Box`, `Servicio`, …) no necesita index signature: alcanza
+  con que sea un `object` con las columnas ya definidas en `src/lib/servicios.ts`.
 
 **Convenciones visuales** (coherencia con el resto):
 
@@ -275,6 +360,43 @@ el primer registro.
 
 **Después de guardar o borrar**: `toast` + recargar la lista. Los mensajes de
 error salen del backend (`message`), no se escriben genéricos en el front.
+
+**Todo campo de precio/monto usa `InputMonto`**
+([src/components/ui/input-monto.tsx](src/components/ui/input-monto.tsx)), nunca
+`<Input type="number">`. Formatea con separador de miles **mientras se
+escribe** (`85.000`), no solo al mostrar en una lista:
+
+```tsx
+import { InputMonto } from "@/components/ui/input-monto";
+
+<InputMonto id="precio" value={precio} onChange={setPrecio} placeholder="0" required />
+```
+
+- `value`/`onChange` manejan un string de solo dígitos (`"85000"`), igual que
+  un `<input type="number">`; el componente se encarga de mostrar el
+  separador y de limpiarlo al leer lo que tipea el usuario.
+- No aplica a porcentajes (comisión, etc.) — esos siguen con `type="number"`.
+- **Si el precio viene de un catálogo y no debe poder alterarse** (p.ej. el
+  precio de lista al cargar un servicio en
+  [src/components/registrar-lavado.tsx](src/components/registrar-lavado.tsx)),
+  el input queda `disabled` y se autocompleta al elegir el ítem del catálogo.
+  Usar `className="disabled:opacity-100"` para que no se vea apagado — sigue
+  siendo el dato principal de la pantalla, solo no editable.
+
+**Los campos de texto libre (observación, comentario) son opcionales por
+defecto**, salvo que el negocio pida lo contrario explícitamente — no agregar
+`required` "porque la columna es NOT NULL". Si la columna real es NOT NULL:
+
+- El **backend** decide el valor por defecto cuando llega vacío/null (p.ej.
+  `PKG_SERVICIOS_CLEANCAR.INSERTAR/ACTUALIZAR` en
+  [backend/servicios.sql](backend/servicios.sql) usa la descripción del
+  servicio si no hay observación) — nunca lo inventa el front ni se relaja el
+  `NOT NULL` de la tabla sin que lo pida el usuario.
+- El **front** no valida "campo obligatorio" para ese campo, y el placeholder
+  aclara qué pasa si se deja vacío (`"...si lo dejás vacío, se usa el nombre
+  del servicio"`).
+- Ojo con Oracle: un `VARCHAR2` vacío (`''`) se trata como `NULL`, así que
+  "opcional" y "el backend rellena si es null" son la misma rama de código.
 
 ---
 
@@ -318,15 +440,16 @@ npx eslint <archivos>            # lint
 | Página APEX | Tabla | Backend | Front |
 | --- | --- | --- | --- |
 | — (login) | `CC_TOKENS` | [backend/login.sql](backend/login.sql) | [src/routes/index.tsx](src/routes/index.tsx) |
-| 1 (home) | — | — | [src/routes/home.tsx](src/routes/home.tsx) · datos de ejemplo |
+| 1 (home) | `SERVICIOS_LAVADERO` ("Últimos movimientos", Facturado/Lavados/Variación de hoy vs. ayer) | [backend/servicios.sql](backend/servicios.sql) | [src/routes/home.tsx](src/routes/home.tsx) · ocupación de boxes (`RESUMEN.boxes`) sigue con datos de ejemplo — no hay concepto de "lavado en curso" en el modelo |
 | 8 (Box) | `BOX_LAV` | [backend/boxes.sql](backend/boxes.sql) | [src/routes/boxes.tsx](src/routes/boxes.tsx) |
-| 14 (Servicios Lavadero) | `SERVICIOS_LAVADERO` | [backend/servicios.sql](backend/servicios.sql) | [src/components/registrar-lavado.tsx](src/components/registrar-lavado.tsx) |
+| 14 (Servicios Lavadero) | `SERVICIOS_LAVADERO` | [backend/servicios.sql](backend/servicios.sql) | [src/components/registrar-lavado.tsx](src/components/registrar-lavado.tsx) + [src/components/ticket-lavado.tsx](src/components/ticket-lavado.tsx) (ticket 57mm, `window.print()`) |
 | 6 y 7 (Servicios) | `SERVICIOS_LAV` | [backend/catalogo-servicios.sql](backend/catalogo-servicios.sql) | [src/routes/servicios.tsx](src/routes/servicios.tsx) |
-| 15 (Ventas / Consulta) | — | pendiente | pendiente |
+| 15 y 16 (Ventas / Ver Ventas) | `SERVICIOS_LAVADERO` | [backend/servicios.sql](backend/servicios.sql) | [src/routes/ventas.tsx](src/routes/ventas.tsx) |
 
 **Pendiente de ejecutar en la base**, en este orden:
 
 ```sql
+@backend/login.sql
 @backend/boxes.sql
 @backend/servicios.sql
 @backend/catalogo-servicios.sql
@@ -334,10 +457,31 @@ npx eslint <archivos>            # lint
 
 **Pendiente de decidir**:
 
-- **Permisos por rol.** Hoy cualquier usuario con token válido puede crear y
-  borrar del catálogo. Si en APEX hay roles (operador vs. administrador), definir
-  cómo se consultan y agregar la verificación en los procedimientos de escritura.
-- **Ticket de impresión.** La página 14 genera un PDF de 57 mm con pdfmake.
-  Falta decidir si se replica igual o se usa la impresión nativa del celular.
 - **Auditoría.** `f_usuario()` ya devuelve quién hace la operación, pero las
   tablas no tienen columna para guardarlo.
+
+**Permisos por rol — resuelto.** Solo `JOSEG` y `EVAC` pueden editar/eliminar
+(`CC_AUTH.ES_ADMIN` en [backend/login.sql](backend/login.sql), aplicado en
+`ACTUALIZAR`/`ELIMINAR` de los tres paquetes CRUD). El alta sigue abierta a
+cualquier usuario con sesión. Ver regla §1.2.8.
+
+**Ticket de impresión — resuelto.** APEX genera un PDF de 57mm con pdfmake
+(página 14); en la PWA se optó por impresión nativa del navegador en vez de
+sumar una librería de PDF:
+
+- [src/components/ticket-lavado.tsx](src/components/ticket-lavado.tsx)
+  renderiza el ticket en HTML, oculto en pantalla (`.ticket-imprimir` en
+  [src/styles.css](src/styles.css) con `display:none`, visible solo dentro de
+  `@media print`, que además oculta el resto de la página con
+  `body * { visibility: hidden }`).
+- Tras un alta exitosa, [src/components/registrar-lavado.tsx](src/components/registrar-lavado.tsx)
+  no cierra el drawer: muestra una confirmación con los botones **Imprimir**
+  (`window.print()`) y **Listo** (recién ahí llama a `onDone`). Mismo patrón
+  que la página 14 de APEX, que habilita "Imprimir" después de guardar.
+- **No se replicó en la edición de ventas** ([src/routes/ventas.tsx](src/routes/ventas.tsx),
+  equivalente a la página 16): se decidió que el ticket se imprime una sola
+  vez, al momento del alta.
+- Para replicar este patrón de impresión en otra pantalla: agregar la clase
+  `ticket-imprimir` (o una nueva `@media print` con otro nombre de clase si el
+  layout difiere) y llamar `window.print()` desde un botón — no hace falta
+  ninguna librería nueva.

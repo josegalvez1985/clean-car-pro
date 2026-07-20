@@ -10,6 +10,15 @@ export interface AuthUser {
   token?: string;
 }
 
+// Refleja CC_AUTH.ES_ADMIN del backend (login.sql): solo estos dos usuarios
+// pueden editar/eliminar. Es solo para ocultar botones — la autorización
+// real la hace el backend (403 si igual se llama al endpoint).
+const ADMINS = ["JOSEG", "EVAC"];
+
+export function esAdmin(user: AuthUser | null): boolean {
+  return !!user && ADMINS.includes(user.username.toUpperCase());
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;

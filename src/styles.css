@@ -245,3 +245,31 @@
     display: none;
   }
 }
+
+/* ---------- Ticket de impresión (57mm) ---------- */
+/* Oculto en pantalla; visible solo al imprimir, y es lo único que se imprime. */
+
+.ticket-imprimir {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .ticket-imprimir,
+  .ticket-imprimir * {
+    visibility: visible;
+  }
+  .ticket-imprimir {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 57mm;
+    padding: 3mm;
+    color: #000;
+    background: #fff;
+    font-family: "Courier New", monospace;
+  }
+}

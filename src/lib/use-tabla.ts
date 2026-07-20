@@ -20,7 +20,7 @@ export interface Columna<T> {
 export type Direccion = "asc" | "desc";
 
 /** Texto buscable de una fila: todos sus valores concatenados. */
-function textoDe(fila: Record<string, unknown>): string {
+function textoDe(fila: object): string {
   return Object.values(fila)
     .filter((v) => v !== null && v !== undefined)
     .join(" ")
@@ -33,10 +33,7 @@ function comparar(a: unknown, b: unknown): number {
   return String(a ?? "").localeCompare(String(b ?? ""), "es", { sensitivity: "base" });
 }
 
-export function useTabla<T extends Record<string, unknown>>(
-  filas: T[],
-  campoInicial: keyof T,
-) {
+export function useTabla<T extends object>(filas: T[], campoInicial: keyof T) {
   const [busqueda, setBusqueda] = useState("");
   const [campo, setCampo] = useState<keyof T>(campoInicial);
   const [direccion, setDireccion] = useState<Direccion>("asc");

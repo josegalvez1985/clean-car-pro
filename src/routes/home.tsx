@@ -35,6 +35,7 @@ import { AquaBackground } from "@/components/aqua-background";
 import { usePwaInstall } from "@/lib/use-pwa-install";
 import { IosInstallHint } from "@/components/ios-install-hint";
 import { RegistrarLavado } from "@/components/registrar-lavado";
+import { listarServiciosLavadero, type ServicioLavadero } from "@/lib/servicios";
 
 export const Route = createFileRoute("/home")({
   component: HomePage,
@@ -42,12 +43,8 @@ export const Route = createFileRoute("/home")({
 
 const GS = new Intl.NumberFormat("es-PY");
 
-// TODO: reemplazar por datos de la API Oracle (GET /lavados/resumen).
+// TODO: reemplazar boxes por ocupación real (no hay concepto de "en curso" todavía).
 const RESUMEN = {
-  facturado: 1_840_000,
-  variacion: 12,
-  lavados: 24,
-  promedioMin: 38,
   boxes: [
     { estado: "ocupado" as const },
     { estado: "ocupado" as const },
@@ -55,43 +52,6 @@ const RESUMEN = {
     { estado: "libre" as const },
     { estado: "libre" as const },
   ],
-};
-
-const MOVIMIENTOS = [
-  {
-    patente: "ABC 123",
-    servicio: "Completo",
-    detalle: "Box 2 · hace 4 min",
-    monto: 85_000,
-    estado: "lavando" as const,
-  },
-  {
-    patente: "HJK 908",
-    servicio: "Premium + cera",
-    detalle: "Box 1 · hace 12 min",
-    monto: 150_000,
-    estado: "lavando" as const,
-  },
-  {
-    patente: "PQR 441",
-    servicio: "Básico",
-    detalle: "Box 4 · 11:20",
-    monto: 55_000,
-    estado: "entregado" as const,
-  },
-  {
-    patente: "MNO 077",
-    servicio: "Detailing",
-    detalle: "Sin asignar · 11:05",
-    monto: 320_000,
-    estado: "espera" as const,
-  },
-];
-
-const PILL: Record<string, { label: string; className: string }> = {
-  entregado: { label: "Entregado", className: "bg-success/15 text-success" },
-  lavando: { label: "Lavando", className: "bg-warning/20 text-warning" },
-  espera: { label: "En espera", className: "bg-muted text-muted-foreground" },
 };
 
 function saludo() {
@@ -109,16 +69,66 @@ function fechaLarga() {
   }).format(new Date());
 }
 
+function fechaISO(fecha: Date) {
+  const off = fecha.getTimezoneOffset();
+  return new Date(fecha.getTime() - off * 60_000).toISOString().slice(0, 10);
+}
+
+interface ResumenHoy {
+  facturado: number;
+  lavados: number;
+  /** % vs. ayer; null si ayer no tuvo ventas (evita dividir por cero). */
+  variacion: number | null;
+}
+
 function HomePage() {
   const navigate = useNavigate();
   const { user, logout, restaurando } = useAuth();
   const { theme, toggle } = useTheme();
   const { canInstall, install, iosHint, dismissIosHint } = usePwaInstall();
   const [altaAbierta, setAltaAbierta] = useState(false);
+  const [movimientos, setMovimientos] = useState<ServicioLavadero[]>([]);
+  const [resumenHoy, setResumenHoy] = useState<ResumenHoy>({
+    facturado: 0,
+    lavados: 0,
+    variacion: null,
+  });
+
+  const cargarMovimientos = () => {
+    listarServiciosLavadero({ tamPagina: 5, todoElPeriodo: true })
+      .then((r) => setMovimientos(r.data))
+      .catch(() => setMovimientos([]));
+  };
+
+  const cargarResumenHoy = () => {
+    const hoy = fechaISO(new Date());
+    const ayer = fechaISO(new Date(Date.now() - 86_400_000));
+    Promise.all([
+      listarServiciosLavadero({ fechaDesde: hoy, fechaHasta: hoy, todoElPeriodo: true }),
+      listarServiciosLavadero({ fechaDesde: ayer, fechaHasta: ayer, todoElPeriodo: true }),
+    ])
+      .then(([deHoy, deAyer]) => {
+        const facturado = deHoy.data.reduce((acc, v) => acc + v.precio, 0);
+        const facturadoAyer = deAyer.data.reduce((acc, v) => acc + v.precio, 0);
+        const variacion =
+          facturadoAyer > 0
+            ? Math.round(((facturado - facturadoAyer) / facturadoAyer) * 100)
+            : null;
+        setResumenHoy({ facturado, lavados: deHoy.data.length, variacion });
+      })
+      .catch(() => setResumenHoy({ facturado: 0, lavados: 0, variacion: null }));
+  };
 
   useEffect(() => {
     if (!restaurando && !user) navigate({ to: "/", replace: true });
   }, [user, restaurando, navigate]);
+
+  useEffect(() => {
+    if (!restaurando && user) {
+      cargarMovimientos();
+      cargarResumenHoy();
+    }
+  }, [user, restaurando]);
 
   if (restaurando || !user) return null;
 
@@ -135,7 +145,6 @@ function HomePage() {
     detalle: string;
     color: string;
     fondo: string;
-    badge: number | null;
     onClick?: () => void;
   }> = [
     {
@@ -144,7 +153,6 @@ function HomePage() {
       detalle: "Cargar un servicio nuevo",
       color: "text-primary",
       fondo: "bg-primary/12",
-      badge: null,
       onClick: () => setAltaAbierta(true),
     },
     {
@@ -153,7 +161,7 @@ function HomePage() {
       detalle: "Servicios del día",
       color: "text-success",
       fondo: "bg-success/15",
-      badge: RESUMEN.lavados,
+      onClick: () => navigate({ to: "/ventas" }),
     },
     {
       icon: ListOrdered,
@@ -161,16 +169,14 @@ function HomePage() {
       detalle: "Catálogo y precios",
       color: "text-warning",
       fondo: "bg-warning/20",
-      badge: null,
       onClick: () => navigate({ to: "/servicios" }),
     },
     {
       icon: Boxes,
       titulo: "Box",
-      detalle: `${enProceso} de ${RESUMEN.boxes.length} ocupados`,
+      detalle: "Administrar boxes",
       color: "text-primary",
       fondo: "bg-primary/12",
-      badge: enProceso,
       onClick: () => navigate({ to: "/boxes" }),
     },
   ];
@@ -250,11 +256,10 @@ function HomePage() {
             className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-cyan-300/25 blur-3xl"
           />
 
-          <div className="mb-3.5 flex items-baseline justify-between gap-2">
+          <div className="mb-3.5">
             <span className="text-[0.65rem] font-semibold uppercase tracking-[0.13em] opacity-75">
               Jornada de hoy
             </span>
-            <span className="text-xs tabular-nums opacity-70">Cierre 18:00</span>
           </div>
 
           <div className="grid grid-cols-2 gap-x-3 gap-y-4">
@@ -262,65 +267,34 @@ function HomePage() {
               <div className="flex flex-wrap items-baseline gap-x-2 text-[2.4rem] font-bold leading-none tracking-tight tabular-nums">
                 <span>
                   <span className="mr-1 text-base font-semibold opacity-70">Gs.</span>
-                  {GS.format(RESUMEN.facturado)}
+                  {GS.format(resumenHoy.facturado)}
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-200 dark:text-success">
-                  <TrendingUp className="h-3.5 w-3.5" />
-                  {RESUMEN.variacion}%
-                </span>
+                {resumenHoy.variacion != null && (
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs font-semibold ${
+                      resumenHoy.variacion >= 0
+                        ? "text-emerald-200 dark:text-success"
+                        : "text-red-200 dark:text-destructive"
+                    }`}
+                  >
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    {resumenHoy.variacion >= 0 ? "+" : ""}
+                    {resumenHoy.variacion}%
+                  </span>
+                )}
               </div>
               <div className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.1em] opacity-70">
-                Facturado
+                Facturado {resumenHoy.variacion != null && "· vs. ayer"}
               </div>
             </div>
 
             <div>
               <div className="text-2xl font-bold leading-none tracking-tight tabular-nums">
-                {RESUMEN.lavados}
+                {resumenHoy.lavados}
               </div>
               <div className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.1em] opacity-70">
                 Lavados
               </div>
-            </div>
-
-            <div>
-              <div className="text-2xl font-bold leading-none tracking-tight tabular-nums">
-                {RESUMEN.promedioMin}
-                <span className="ml-0.5 text-sm font-semibold opacity-70">min</span>
-              </div>
-              <div className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.1em] opacity-70">
-                Promedio
-              </div>
-            </div>
-          </div>
-
-          {/* Ocupación de boxes: una celda por box, el ámbar es el próximo a liberarse. */}
-          <div className="mt-4">
-            <div className="mb-1.5 flex items-baseline justify-between">
-              <span className="text-[0.65rem] font-semibold uppercase tracking-[0.1em] opacity-70">
-                Ocupación de boxes
-              </span>
-              <span className="text-xs font-semibold tabular-nums">
-                {enProceso} / {RESUMEN.boxes.length}
-              </span>
-            </div>
-            <div
-              className="flex gap-1.5"
-              role="img"
-              aria-label={`${enProceso} de ${RESUMEN.boxes.length} boxes ocupados`}
-            >
-              {RESUMEN.boxes.map((b, i) => (
-                <span
-                  key={i}
-                  className={`h-1.5 flex-1 rounded-full ${
-                    b.estado === "ocupado"
-                      ? "bg-emerald-300 dark:bg-success"
-                      : b.estado === "porLiberarse"
-                        ? "bg-amber-300 dark:bg-warning"
-                        : "bg-white/25 dark:bg-muted"
-                  }`}
-                />
-              ))}
             </div>
           </div>
         </section>
@@ -337,11 +311,6 @@ function HomePage() {
               onClick={a.onClick}
               className="relative flex flex-col gap-2 rounded-2xl border border-border/60 bg-card/70 p-4 text-left shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
-              {a.badge != null && (
-                <span className="absolute right-3 top-3 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[0.65rem] font-bold tabular-nums text-primary-foreground">
-                  {a.badge}
-                </span>
-              )}
               <span className={`grid h-9 w-9 place-items-center rounded-xl ${a.fondo} ${a.color}`}>
                 <a.icon className="h-[18px] w-[18px]" />
               </span>
@@ -356,37 +325,40 @@ function HomePage() {
           <h3 className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Últimos movimientos
           </h3>
-          <button type="button" className="text-xs font-semibold text-primary hover:underline">
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/ventas" })}
+            className="text-xs font-semibold text-primary hover:underline"
+          >
             Ver todo
           </button>
         </div>
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-sm backdrop-blur">
-          {MOVIMIENTOS.map((m, i) => (
-            <div
-              key={m.patente}
-              className={`flex items-center gap-3 p-3.5 ${
-                i > 0 ? "border-t border-border/60" : ""
-              }`}
-            >
-              <span className="flex-none rounded-lg border border-border bg-muted/60 px-2 py-1 font-mono text-xs font-bold tracking-wider">
-                {m.patente}
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                <b className="truncate text-sm font-semibold">{m.servicio}</b>
-                <span className="truncate text-xs text-muted-foreground">{m.detalle}</span>
-              </span>
-              <span className="flex flex-none flex-col items-end gap-1">
-                <span className="text-sm font-bold tabular-nums">{GS.format(m.monto)}</span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide ${PILL[m.estado].className}`}
-                >
-                  <span className="h-1 w-1 rounded-full bg-current" />
-                  {PILL[m.estado].label}
+        {movimientos.length === 0 ? (
+          <p className="rounded-2xl border border-border/60 bg-card/70 p-4 text-center text-sm text-muted-foreground backdrop-blur">
+            Todavía no hay movimientos registrados.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-sm backdrop-blur">
+            {movimientos.map((m, i) => (
+              <div
+                key={m.id_servicio_lavadero}
+                className={`flex items-center gap-3 p-3.5 ${
+                  i > 0 ? "border-t border-border/60" : ""
+                }`}
+              >
+                <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                  <b className="truncate text-sm font-semibold">{m.servicio}</b>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {m.box} · {m.fecha}
+                  </span>
                 </span>
-              </span>
-            </div>
-          ))}
-        </div>
+                <span className="flex-none text-sm font-bold tabular-nums">
+                  {GS.format(m.precio)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
 
       {/* Navegación inferior: PWA de celular, al alcance del pulgar. */}
@@ -436,7 +408,13 @@ function HomePage() {
               <DrawerTitle>Servicios a clientes</DrawerTitle>
               <DrawerDescription>Registrá un servicio del lavadero.</DrawerDescription>
             </DrawerHeader>
-            <RegistrarLavado onDone={() => setAltaAbierta(false)} />
+            <RegistrarLavado
+              onDone={() => {
+                setAltaAbierta(false);
+                cargarMovimientos();
+                cargarResumenHoy();
+              }}
+            />
           </div>
         </DrawerContent>
       </Drawer>

@@ -4,6 +4,7 @@ import { ArrowLeft, ListOrdered, Loader2, Pencil, Plus, Trash2 } from "lucide-re
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputMonto } from "@/components/ui/input-monto";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -23,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAuth } from "@/lib/auth";
+import { esAdmin, useAuth } from "@/lib/auth";
 import { AquaBackground } from "@/components/aqua-background";
 import {
   actualizarServicio,
@@ -32,6 +33,14 @@ import {
   listarCatalogo,
   type Servicio,
 } from "@/lib/servicios";
+import { useTabla, type Columna } from "@/lib/use-tabla";
+import { BuscadorTabla, EncabezadosTabla } from "@/components/tabla-toolbar";
+
+const COLUMNAS: Columna<Servicio>[] = [
+  { campo: "descripcion", titulo: "Descripción" },
+  { campo: "porc_comision", titulo: "Comisión", numerica: true },
+  { campo: "precio", titulo: "Precio", numerica: true },
+];
 
 export const Route = createFileRoute("/servicios")({
   component: ServiciosPage,
@@ -43,6 +52,7 @@ const GS = new Intl.NumberFormat("es-PY");
 function ServiciosPage() {
   const navigate = useNavigate();
   const { user, restaurando } = useAuth();
+  const puedeEditar = esAdmin(user);
 
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -58,6 +68,11 @@ function ServiciosPage() {
 
   const [aBorrar, setABorrar] = useState<Servicio | null>(null);
   const [borrando, setBorrando] = useState(false);
+
+  const { busqueda, setBusqueda, campo, direccion, ordenarPor, resultado } = useTabla(
+    servicios,
+    "descripcion",
+  );
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -214,70 +229,89 @@ function ServiciosPage() {
             </Button>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-sm backdrop-blur">
-            {servicios.map((s, i) => (
-              <div
-                key={s.id_servicio}
-                className={`flex items-center gap-3 p-3.5 ${
-                  i > 0 ? "border-t border-border/60" : ""
-                }`}
-              >
-                <span
-                  className={`grid h-9 w-9 flex-none place-items-center rounded-xl ${
-                    s.estado === "A"
-                      ? "bg-warning/20 text-warning"
-                      : "bg-muted text-muted-foreground"
+          <>
+            <BuscadorTabla
+              valor={busqueda}
+              onChange={setBusqueda}
+              placeholder="Buscar servicio…"
+              resultados={resultado.length}
+              total={servicios.length}
+            />
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-sm backdrop-blur">
+              <EncabezadosTabla
+                columnas={COLUMNAS}
+                campo={campo}
+                direccion={direccion}
+                onOrdenar={ordenarPor}
+              />
+              {resultado.map((s, i) => (
+                <div
+                  key={s.id_servicio}
+                  className={`flex items-center gap-3 p-3.5 ${
+                    i > 0 ? "border-t border-border/60" : ""
                   }`}
                 >
-                  <ListOrdered className="h-[18px] w-[18px]" />
-                </span>
-
-                {/* El chip va en la segunda línea: en pantalla angosta, al lado
-                    del nombre le robaba el ancho y lo truncaba. */}
-                <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                  <b
-                    className={`truncate text-sm font-semibold ${
-                      s.estado === "A" ? "" : "text-muted-foreground line-through"
+                  <span
+                    className={`grid h-9 w-9 flex-none place-items-center rounded-xl ${
+                      s.estado === "A"
+                        ? "bg-warning/20 text-warning"
+                        : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    {s.descripcion}
-                  </b>
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="whitespace-nowrap tabular-nums">
-                      Comisión {s.porc_comision}%
-                    </span>
-                    {s.estado !== "A" && (
-                      <span className="flex-none rounded-full bg-muted px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide">
-                        Inactivo
-                      </span>
-                    )}
+                    <ListOrdered className="h-[18px] w-[18px]" />
                   </span>
-                </span>
 
-                <span className="flex-none text-sm font-bold tabular-nums">
-                  {GS.format(s.precio)}
-                </span>
+                  {/* El chip va en la segunda línea: en pantalla angosta, al lado
+                      del nombre le robaba el ancho y lo truncaba. */}
+                  <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                    <b
+                      className={`truncate text-sm font-semibold ${
+                        s.estado === "A" ? "" : "text-muted-foreground line-through"
+                      }`}
+                    >
+                      {s.descripcion}
+                    </b>
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="whitespace-nowrap tabular-nums">
+                        Comisión {s.porc_comision}%
+                      </span>
+                      {s.estado !== "A" && (
+                        <span className="flex-none rounded-full bg-muted px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide">
+                          Inactivo
+                        </span>
+                      )}
+                    </span>
+                  </span>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => abrirEdicion(s)}
-                  aria-label={`Editar ${s.descripcion}`}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setABorrar(s)}
-                  aria-label={`Eliminar ${s.descripcion}`}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
+                  <span className="flex-none text-sm font-bold tabular-nums">
+                    {GS.format(s.precio)}
+                  </span>
+
+                  {puedeEditar && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => abrirEdicion(s)}
+                        aria-label={`Editar ${s.descripcion}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setABorrar(s)}
+                        aria-label={`Eliminar ${s.descripcion}`}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </main>
 
@@ -313,14 +347,10 @@ function ServiciosPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="precio">Precio</Label>
-                  <Input
+                  <InputMonto
                     id="precio"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="1"
                     value={precio}
-                    onChange={(e) => setPrecio(e.target.value)}
+                    onChange={setPrecio}
                     placeholder="0"
                     className="tabular-nums"
                     required

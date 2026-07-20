@@ -96,6 +96,13 @@ CREATE OR REPLACE PACKAGE cc_auth AS
     p_authorization IN VARCHAR2
   ) RETURN VARCHAR2;
 
+  -- true si el usuario (tal como devuelve validar_token, en MAYÚSCULAS)
+  -- puede editar/eliminar registros. Lista corta a propósito: JOSEG y EVAC
+  -- son los únicos habilitados; el resto del personal solo da de alta.
+  FUNCTION es_admin(
+    p_usuario IN VARCHAR2
+  ) RETURN BOOLEAN;
+
   -- Handlers HTTP (escriben JSON directamente en la respuesta).
   PROCEDURE login(
     p_usuario  IN VARCHAR2,
@@ -163,6 +170,13 @@ CREATE OR REPLACE PACKAGE BODY cc_auth AS
     END IF;
     RETURN validar_token(TRIM(SUBSTR(p_authorization, 8)));
   END usuario_desde_bearer;
+
+  FUNCTION es_admin(
+    p_usuario IN VARCHAR2
+  ) RETURN BOOLEAN IS
+  BEGIN
+    RETURN UPPER(p_usuario) IN ('JOSEG', 'EVAC');
+  END es_admin;
 
   PROCEDURE login(
     p_usuario  IN VARCHAR2,

@@ -22,9 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAuth } from "@/lib/auth";
+import { esAdmin, useAuth } from "@/lib/auth";
 import { AquaBackground } from "@/components/aqua-background";
 import { actualizarBox, borrarBox, crearBox, listarBoxes, type Box } from "@/lib/servicios";
+import { useTabla, type Columna } from "@/lib/use-tabla";
+import { BuscadorTabla, EncabezadosTabla } from "@/components/tabla-toolbar";
+
+const COLUMNAS: Columna<Box>[] = [{ campo: "descripcion", titulo: "Descripción" }];
 
 export const Route = createFileRoute("/boxes")({
   component: BoxesPage,
@@ -35,6 +39,7 @@ const DESCRIPCION_MAX = 500;
 function BoxesPage() {
   const navigate = useNavigate();
   const { user, restaurando } = useAuth();
+  const puedeEditar = esAdmin(user);
 
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -47,6 +52,11 @@ function BoxesPage() {
 
   const [aBorrar, setABorrar] = useState<Box | null>(null);
   const [borrando, setBorrando] = useState(false);
+
+  const { busqueda, setBusqueda, campo, direccion, ordenarPor, resultado } = useTabla(
+    boxes,
+    "descripcion",
+  );
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -178,40 +188,59 @@ function BoxesPage() {
             </Button>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-sm backdrop-blur">
-            {boxes.map((box, i) => (
-              <div
-                key={box.id_box}
-                className={`flex items-center gap-3 p-3.5 ${
-                  i > 0 ? "border-t border-border/60" : ""
-                }`}
-              >
-                <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-primary/12 text-primary">
-                  <BoxesIcon className="h-[18px] w-[18px]" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {box.descripcion}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => abrirEdicion(box)}
-                  aria-label={`Editar ${box.descripcion}`}
+          <>
+            <BuscadorTabla
+              valor={busqueda}
+              onChange={setBusqueda}
+              placeholder="Buscar box…"
+              resultados={resultado.length}
+              total={boxes.length}
+            />
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/70 shadow-sm backdrop-blur">
+              <EncabezadosTabla
+                columnas={COLUMNAS}
+                campo={campo}
+                direccion={direccion}
+                onOrdenar={ordenarPor}
+              />
+              {resultado.map((box, i) => (
+                <div
+                  key={box.id_box}
+                  className={`flex items-center gap-3 p-3.5 ${
+                    i > 0 ? "border-t border-border/60" : ""
+                  }`}
                 >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setABorrar(box)}
-                  aria-label={`Eliminar ${box.descripcion}`}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
+                  <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-primary/12 text-primary">
+                    <BoxesIcon className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {box.descripcion}
+                  </span>
+                  {puedeEditar && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => abrirEdicion(box)}
+                        aria-label={`Editar ${box.descripcion}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setABorrar(box)}
+                        aria-label={`Eliminar ${box.descripcion}`}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </main>
 
@@ -237,7 +266,6 @@ function BoxesPage() {
                   value={descripcion}
                   onChange={(e) => setDescripcion(e.target.value)}
                   maxLength={DESCRIPCION_MAX}
-                  placeholder="Box 1"
                   autoComplete="off"
                   required
                 />
