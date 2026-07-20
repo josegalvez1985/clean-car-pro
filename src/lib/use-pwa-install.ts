@@ -33,7 +33,7 @@ export function usePwaInstall() {
 
     // Registrar el service worker (requisito para que el navegador ofrezca instalar).
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
+      navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
         /* sin SW no hay instalación automática, pero no rompe la app */
       });
     }

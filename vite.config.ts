@@ -1,9 +1,8 @@
 import { defineConfig, loadEnv } from "vite";
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
-import { nitro } from "nitro/vite";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
@@ -14,6 +13,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     define,
+    base: env.VITE_BASE_PATH ?? "/",
     server: { host: "::", port: 8080 },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },
@@ -38,9 +38,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       tailwindcss(),
       tsConfigPaths({ projects: ["./tsconfig.json"] }),
-      // Redirige el server entry de TanStack Start a src/server.ts (wrapper de errores SSR).
-      tanstackStart({ server: { entry: "server" } }),
-      nitro(),
+      tanstackRouter({ target: "react", autoCodeSplitting: true }),
       viteReact(),
     ],
   };

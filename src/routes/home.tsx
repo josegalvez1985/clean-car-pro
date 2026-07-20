@@ -188,7 +188,11 @@ function HomePage() {
       <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3">
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl">
-            <img src="/logo.png" alt="" className="h-full w-full object-contain" />
+            <img
+              src={`${import.meta.env.BASE_URL}logo.png`}
+              alt=""
+              className="h-full w-full object-contain"
+            />
           </div>
           <div className="min-w-0 leading-tight">
             <h1 className="text-[0.95rem] font-semibold">Clean Car</h1>

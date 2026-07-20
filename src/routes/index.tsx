@@ -104,7 +104,11 @@ function LoginPage() {
           <div className="relative mb-4">
             <div className="absolute inset-0 -z-10 scale-125 rounded-full bg-primary/30 blur-2xl" />
             <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-[2rem] bg-card/80 shadow-xl shadow-primary/25 ring-1 ring-border backdrop-blur">
-              <img src="/logo.png" alt="Clean Car" className="h-full w-full object-contain" />
+              <img
+                src={`${import.meta.env.BASE_URL}logo.png`}
+                alt="Clean Car"
+                className="h-full w-full object-contain"
+              />
             </div>
           </div>
           <h1 className="bg-gradient-to-r from-primary via-sky-500 to-cyan-400 bg-clip-text text-3xl font-bold tracking-tight text-transparent dark:via-sky-400 dark:to-cyan-300">
