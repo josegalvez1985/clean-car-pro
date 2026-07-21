@@ -254,40 +254,34 @@ function HomePage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-3 gap-y-4">
-            <div className="col-span-2">
-              <div className="flex flex-wrap items-baseline gap-x-2 text-[2.4rem] font-bold leading-none tracking-tight tabular-nums">
-                <span>
-                  <span className="mr-1 text-base font-semibold opacity-70">Gs.</span>
-                  {GS.format(resumenHoy.facturado)}
+          <div>
+            <div className="flex flex-wrap items-baseline gap-x-2 text-[2.4rem] font-bold leading-none tracking-tight tabular-nums">
+              <span>
+                <span className="mr-1 text-base font-semibold opacity-70">Gs.</span>
+                {GS.format(resumenHoy.facturado)}
+              </span>
+              <span className="text-base font-semibold opacity-70">
+                · {resumenHoy.lavados} lavados
+              </span>
+              {resumenHoy.variacion != null && (
+                <span
+                  className={`inline-flex items-center gap-1 text-xs font-semibold ${
+                    resumenHoy.variacion >= 0
+                      ? "text-emerald-200 dark:text-success"
+                      : "text-red-200 dark:text-destructive"
+                  }`}
+                >
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  {resumenHoy.variacion >= 0 ? "+" : ""}
+                  {resumenHoy.variacion}%
                 </span>
-                {resumenHoy.variacion != null && (
-                  <span
-                    className={`inline-flex items-center gap-1 text-xs font-semibold ${
-                      resumenHoy.variacion >= 0
-                        ? "text-emerald-200 dark:text-success"
-                        : "text-red-200 dark:text-destructive"
-                    }`}
-                  >
-                    <TrendingUp className="h-3.5 w-3.5" />
-                    {resumenHoy.variacion >= 0 ? "+" : ""}
-                    {resumenHoy.variacion}%
-                  </span>
-                )}
-              </div>
-              <div className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.1em] opacity-70">
-                Facturado {resumenHoy.variacion != null && "· vs. ayer"}
-              </div>
+              )}
             </div>
-
-            <div>
-              <div className="text-2xl font-bold leading-none tracking-tight tabular-nums">
-                {resumenHoy.lavados}
-              </div>
+            {resumenHoy.variacion != null && (
               <div className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.1em] opacity-70">
-                Lavados
+                vs. ayer
               </div>
-            </div>
+            )}
           </div>
         </section>
 
