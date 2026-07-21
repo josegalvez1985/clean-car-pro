@@ -14,9 +14,11 @@ Oracle/ORDS.
 - **[Bun](https://bun.sh)** como package manager (`bun.lock`)
 - **Backend**: paquetes PL/SQL expuestos como API REST vía Oracle ORDS
 
-> Al ser una app con servidor (SSR/Nitro), **no se puede desplegar en GitHub
-> Pages** (solo sirve estático). Usar Vercel, Netlify, o cualquier host que
-> corra el server de Nitro generado por `bun run build`.
+> La app es un SPA estático (sin SSR): se despliega en **GitHub Pages** con
+> [.github/workflows/deploy.yml](.github/workflows/deploy.yml). Como Pages no
+> tiene proxy, el backend ORDS debe permitir el origen `github.io` — ver
+> **[GUIA-DEPLOY.md](GUIA-DEPLOY.md)**. La alternativa sin CORS es un host con
+> Node ([vercel.json](vercel.json)), que sí reproduce el proxy.
 
 ## Requisitos
 

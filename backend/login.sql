@@ -276,12 +276,19 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 
+  -- OJO: delete_module (arriba) borra también los origenes CORS del modulo. Por
+  -- eso se pasan acá, en la misma llamada que lo recrea: si el script se corta
+  -- antes del paso 4/5, el modulo igual queda con la lista blanca puesta. Sin
+  -- esto, el modulo existe unos instantes sin CORS y todo responde 403
+  -- "failed cross origin request validation" — se nota primero en el login,
+  -- que es un POST con Content-Type: application/json y dispara preflight.
   ords.define_module(
-    p_module_name    => 'cleancar.api',
-    p_base_path      => 'api/',
-    p_items_per_page => 0,
-    p_status         => 'PUBLISHED',
-    p_comments       => 'Clean Car — autenticación por token'
+    p_module_name     => 'cleancar.api',
+    p_base_path       => 'api/',
+    p_items_per_page  => 0,
+    p_status          => 'PUBLISHED',
+    p_origins_allowed => 'https://josegalvez1985.github.io,http://localhost:8080,http://192.168.100.16:8080',
+    p_comments        => 'Clean Car — autenticación por token'
   );
 
   ----------------------------------------------------------------------------
@@ -377,13 +384,20 @@ END;
 PROMPT ============================================================
 PROMPT  4/5  CORS (ajustá los orígenes permitidos)
 PROMPT ============================================================
+-- Redundante con el p_origins_allowed del paso 3/5, y a propósito: este bloque
+-- es el que se reejecuta cuando cambia un origen (una IP de LAN por DHCP, un
+-- dominio nuevo) sin querer recrear el módulo entero.
+--
+-- No agregar handlers OPTIONS a mano: con origins_allowed cargado, ORDS
+-- responde el preflight solo. Un handler propio duplica los headers CORS
+-- (ver GUIA-CRUD.md §1.3).
 BEGIN
-  -- >>> CAMBIAR <<< : orígenes del frontend (GitHub Pages + Vite local + IPs de red).
-  -- Solo esquema+host+puerto, sin path. Las IPs de LAN son para abrir la app
-  -- desde otro dispositivo; si cambian por DHCP hay que actualizarlas acá.
+  -- >>> CAMBIAR <<< : orígenes del frontend (GitHub Pages + Vite local + la IP
+  -- de LAN del celular). Solo esquema+host+puerto, sin path y sin barra final.
+  -- La IP cambia por DHCP: si deja de andar desde el teléfono, actualizala.
   ords.set_module_origins_allowed(
     p_module_name     => 'cleancar.api',
-    p_origins_allowed => 'https://josegalvez1985.github.io,http://localhost:8080,http://192.168.4.118:8080,http://172.30.144.1:8080'
+    p_origins_allowed => 'https://josegalvez1985.github.io,http://localhost:8080,http://192.168.100.16:8080'
   );
   COMMIT;
 END;

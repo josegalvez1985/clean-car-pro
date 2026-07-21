@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # No cancelar un deploy en curso: cortarlo a la mitad puede dejar el entorno
+  # github-pages colgado y encolar los siguientes indefinidamente.
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -28,7 +30,13 @@ jobs:
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
           VITE_API_URL: ${{ vars.VITE_API_URL }}
-      - run: cp dist/index.html dist/404.html
+      # 404.html: Pages no tiene rewrites, así que al recargar una subruta
+      # (/clean-car-pro/ventas) sirve este archivo y el router toma el control.
+      # .nojekyll: sin esto Jekyll descarta todo lo que empieza con "_".
+      - name: Preparar salida para Pages
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { Fingerprint, Loader2, Lock, User } from "lucide-react";
+import { Eye, EyeOff, Fingerprint, Loader2, Lock, User } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
+  const [verPassword, setVerPassword] = useState(false);
   const [canBiometric, setCanBiometric] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -144,14 +145,25 @@ function LoginPage() {
               <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="password"
-                type="password"
+                type={verPassword ? "text" : "password"}
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="pl-9"
+                className="pl-9 pr-9"
               />
+              {/* tabIndex -1: el tab va del campo al botón Ingresar, no al ojo. */}
+              <button
+                type="button"
+                onClick={() => setVerPassword((v) => !v)}
+                tabIndex={-1}
+                aria-label={verPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                aria-pressed={verPassword}
+                className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {verPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
           </div>
 
