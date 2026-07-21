@@ -21,6 +21,7 @@ import {
   type Servicio,
 } from "@/lib/servicios";
 import { TicketLavado, type DatosTicket } from "@/components/ticket-lavado";
+import { bluetoothDisponible, imprimirTicket } from "@/lib/impresora";
 
 const COMENTARIO_MAX = 500;
 
@@ -47,6 +48,7 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
   const [comentario, setComentario] = useState("");
   const [saving, setSaving] = useState(false);
   const [ticket, setTicket] = useState<DatosTicket | null>(null);
+  const [imprimiendo, setImprimiendo] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -96,7 +98,10 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
 
     const box = boxes.find((b) => String(b.id_box) === idBox);
     const servicio = servicios.find((s) => String(s.id_servicio) === idServicio);
-    // Sin observación, el backend guarda la descripción del servicio.
+    // Sin observación se guarda la descripción del servicio. El default vive en
+    // el backend (INSERTAR en servicios.sql), pero solo se aplica si el
+    // comentario llega NULL: una cadena vacía lo saltea y la fila queda sin
+    // descripción. Por eso el fallback se resuelve acá antes de mandarlo.
     const comentarioFinal = comentario.trim() || servicio?.descripcion || "";
 
     setSaving(true);
@@ -105,7 +110,7 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
         id_box: Number(idBox),
         id_servicio: Number(idServicio),
         fecha,
-        comentario: comentario.trim(),
+        comentario: comentarioFinal,
         precio: Number(precio),
       });
       toast.success("Servicio registrado");
@@ -145,6 +150,28 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
     );
   }
 
+  /**
+   * Impresión directa por Bluetooth. Sin soporte (iOS, Firefox) se cae al
+   * diálogo del navegador, que usa el ticket oculto de <TicketLavado>.
+   */
+  const onImprimir = async () => {
+    if (!bluetoothDisponible()) {
+      window.print();
+      return;
+    }
+    setImprimiendo(true);
+    try {
+      await imprimirTicket(ticket!);
+      toast.success("Ticket enviado a la impresora");
+    } catch (err) {
+      // Cancelar el selector de dispositivos no es un error que valga avisar.
+      if (err instanceof DOMException && err.name === "NotFoundError") return;
+      toast.error(err instanceof Error ? err.message : "No se pudo imprimir");
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
   if (ticket) {
     return (
       <div className="space-y-5">
@@ -160,9 +187,15 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
             type="button"
             variant="outline"
             className="h-12 flex-1 text-base"
-            onClick={() => window.print()}
+            disabled={imprimiendo}
+            onClick={() => void onImprimir()}
           >
-            <Printer className="mr-1.5 h-4 w-4" /> Imprimir
+            {imprimiendo ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="mr-1.5 h-4 w-4" />
+            )}
+            {imprimiendo ? "Imprimiendo…" : "Imprimir"}
           </Button>
           <Button type="button" className="h-12 flex-1 text-base" onClick={onDone}>
             Listo

@@ -69,7 +69,27 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
 
-  if (res.status === 401 || res.status === 403) {
+  // ORDS puede devolver 200 con {success:false}: también es error.
+  const failed =
+    data && typeof data === "object" && (data as { success?: boolean }).success === false;
+
+  // Los paquetes PL/SQL devuelven { success:false, message:"..." }.
+  const msg = String(
+    (data &&
+      typeof data === "object" &&
+      ((data as { message?: string }).message ?? (data as { error?: string }).error)) ||
+      (typeof data === "string" && data) ||
+      `Error ${res.status}`,
+  );
+
+  // El status 401 no alcanza para detectar la sesión vencida: OWA_UTIL.STATUS_LINE
+  // no siempre llega a fijarlo y ORDS termina respondiendo 200 con el error en el
+  // body. Por eso también se mira el mensaje que mandan los paquetes PL/SQL
+  // (p_error(401, ...) en backend/*.sql).
+  const sesionVencida =
+    res.status === 401 || res.status === 403 || /token\s+inv[aá]lido|token\s+expirado/i.test(msg);
+
+  if (sesionVencida) {
     // Si el handler todavía no está registrado, limpiar igual la sesión: sin
     // esto el usuario queda con un token muerto en localStorage y la app no
     // vuelve al login.
@@ -78,19 +98,8 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new SesionExpiradaError();
   }
 
-  // ORDS puede devolver 200 con {success:false}: también es error.
-  const failed =
-    data && typeof data === "object" && (data as { success?: boolean }).success === false;
-
   if (!res.ok || failed) {
-    // Los paquetes PL/SQL devuelven { success:false, message:"..." }.
-    const msg =
-      (data &&
-        typeof data === "object" &&
-        ((data as { message?: string }).message ?? (data as { error?: string }).error)) ||
-      (typeof data === "string" && data) ||
-      `Error ${res.status}`;
-    throw new Error(String(msg));
+    throw new Error(msg);
   }
 
   return data as T;

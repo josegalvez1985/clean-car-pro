@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Pencil, Receipt, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, Printer, Receipt, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { mensajeError } from "@/lib/api";
+import { bluetoothDisponible, imprimirTicket } from "@/lib/impresora";
 import { esAdmin, useAuth } from "@/lib/auth";
 import { AquaBackground } from "@/components/aqua-background";
 import {
@@ -71,6 +72,7 @@ function VentasPage() {
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
   const [cargandoMas, setCargandoMas] = useState(false);
+  const [imprimiendoId, setImprimiendoId] = useState<number | null>(null);
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -159,6 +161,31 @@ function VentasPage() {
 
   if (restaurando || !user) return null;
 
+  /** Reimprime el ticket de una venta ya registrada, directo a la térmica. */
+  const reimprimir = async (v: ServicioLavadero) => {
+    if (!bluetoothDisponible()) {
+      toast.error("Este navegador no soporta impresión Bluetooth. Usá Chrome en Android.");
+      return;
+    }
+    setImprimiendoId(v.id_servicio_lavadero);
+    try {
+      await imprimirTicket({
+        fecha: v.fecha,
+        box: v.box,
+        servicio: v.servicio,
+        comentario: v.comentario,
+        precio: v.precio,
+      });
+      toast.success("Ticket enviado a la impresora");
+    } catch (err) {
+      // Cancelar el selector de dispositivos no es un error que valga avisar.
+      if (err instanceof DOMException && err.name === "NotFoundError") return;
+      toast.error(err instanceof Error ? err.message : "No se pudo imprimir");
+    } finally {
+      setImprimiendoId(null);
+    }
+  };
+
   const abrirEdicion = (v: ServicioLavadero) => {
     setEditando(v);
     setIdBox(String(v.id_box));
@@ -181,13 +208,20 @@ function VentasPage() {
       return;
     }
 
+    // La observación es opcional: sin ella se guarda la descripción del
+    // servicio, igual que en el alta (ver registrar-lavado.tsx). El backend
+    // solo aplica ese default si el comentario llega NULL, y una cadena vacía
+    // no lo activa: por eso el fallback se resuelve acá.
+    const servicioElegido = servicios.find((s) => String(s.id_servicio) === idServicio);
+    const comentarioFinal = comentario.trim() || servicioElegido?.descripcion || "";
+
     setGuardando(true);
     try {
       await actualizarServicioLavadero(editando.id_servicio_lavadero, {
         id_box: Number(idBox),
         id_servicio: Number(idServicio),
         fecha,
-        comentario: comentario.trim(),
+        comentario: comentarioFinal,
         precio: Number(precio),
       });
       toast.success("Venta actualizada");
@@ -337,6 +371,19 @@ function VentasPage() {
                   <span className="flex-none text-sm font-bold tabular-nums">
                     {GS.format(v.precio)}
                   </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => void reimprimir(v)}
+                    disabled={imprimiendoId === v.id_servicio_lavadero}
+                    aria-label={`Reimprimir ticket de ${v.servicio}`}
+                  >
+                    {imprimiendoId === v.id_servicio_lavadero ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Printer className="h-4 w-4" />
+                    )}
+                  </Button>
                   {puedeEditar && (
                     <>
                       <Button
