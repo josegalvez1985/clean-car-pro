@@ -53,7 +53,7 @@ function CuentaPage() {
   }, []);
 
   useEffect(() => {
-    if (!restaurando && !user) navigate({ to: "/" });
+    if (!restaurando && !user) navigate({ to: "/", replace: true });
   }, [restaurando, user, navigate]);
 
   if (restaurando || !user) return null;

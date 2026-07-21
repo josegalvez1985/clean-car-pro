@@ -98,8 +98,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { Authorization: `Bearer ${stored.token}` },
     })
       .then((res) => {
-        if (!res.ok) {
-          // Token expirado o inválido: cerrar sesión.
+        // Solo 401/403 significan token expirado o inválido. Un 500 del backend
+        // no invalida la sesión: expulsar ahí sería perder al usuario por una
+        // caída pasajera del servidor.
+        if (res.status === 401 || res.status === 403) {
           localStorage.removeItem(STORAGE_KEY);
           setUser(null);
         }
