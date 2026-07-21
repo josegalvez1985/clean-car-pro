@@ -23,8 +23,30 @@ function isIOS() {
   );
 }
 
+// `beforeinstallprompt` se dispara una sola vez, poco después de cargar la
+// página. Si el listener viviera en el efecto del componente, cualquier
+// pantalla montada por navegación de cliente (p. ej. entrar a /cuenta desde el
+// home) llegaría tarde: el evento ya pasó y el botón queda deshabilitado con
+// "No disponible en este navegador". Por eso se captura a nivel de módulo, al
+// importar la app, y los componentes se suscriben al valor ya guardado.
+let promptGuardado: BeforeInstallPromptEvent | null = null;
+const suscriptores = new Set<(e: BeforeInstallPromptEvent | null) => void>();
+
+function emitir(e: BeforeInstallPromptEvent | null) {
+  promptGuardado = e;
+  for (const fn of suscriptores) fn(e);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e: Event) => {
+    e.preventDefault();
+    emitir(e as BeforeInstallPromptEvent);
+  });
+  window.addEventListener("appinstalled", () => emitir(null));
+}
+
 export function usePwaInstall() {
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(promptGuardado);
   const [installed, setInstalled] = useState(false);
   const [iosHint, setIosHint] = useState(false);
 
@@ -38,21 +60,19 @@ export function usePwaInstall() {
       });
     }
 
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferred(e as BeforeInstallPromptEvent);
-    };
-    const onInstalled = () => {
-      setInstalled(true);
-      setDeferred(null);
-      setIosHint(false);
-    };
+    // Tomar el prompt que se haya capturado antes de montar este componente.
+    setDeferred(promptGuardado);
 
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
+    const onCambio = (e: BeforeInstallPromptEvent | null) => {
+      setDeferred(e);
+      if (e === null) {
+        setInstalled(isStandalone());
+        setIosHint(false);
+      }
+    };
+    suscriptores.add(onCambio);
     return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
+      suscriptores.delete(onCambio);
     };
   }, []);
 
@@ -60,7 +80,9 @@ export function usePwaInstall() {
     if (deferred) {
       await deferred.prompt();
       await deferred.userChoice;
-      setDeferred(null);
+      // El prompt es de un solo uso: el navegador emite otro si sigue siendo
+      // instalable, así que se descarta el consumido.
+      emitir(null);
       return;
     }
     // iOS no expone la API: mostramos instrucciones manuales.

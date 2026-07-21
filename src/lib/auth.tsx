@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { setUnauthorizedHandler } from "./api";
 
 const STORAGE_KEY = "cleancar.auth";
@@ -49,12 +49,22 @@ export function getStoredUsername(): string | null {
   return readStored()?.username ?? null;
 }
 
+/** Borra la sesión persistida. Usable fuera de React (ver src/lib/api.ts). */
+export function clearStoredSession() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(false);
   // Arranca en true: hasta leer localStorage no sabemos si hay sesión, y sin
   // esto las páginas protegidas redirigen al login en el primer render.
   const [restaurando, setRestaurando] = useState(true);
+  const handlerRegistrado = useRef(false);
 
   useEffect(() => {
     const raw = (() => {
@@ -112,17 +122,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Cuando api.ts recibe 401/403 limpia la sesión y la app vuelve al login.
-  useEffect(() => {
+  // Se registra durante el render (no en un efecto) porque las pantallas
+  // disparan sus fetch en su propio efecto: con StrictMode montando dos veces,
+  // un registro en efecto deja una ventana con el handler en null y el 401 se
+  // pierde en silencio. Tampoco se desregistra en el cleanup por la misma
+  // razón — el AuthProvider vive mientras vive la app.
+  if (!handlerRegistrado.current) {
+    handlerRegistrado.current = true;
     setUnauthorizedHandler(() => {
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch {
-        /* ignore */
-      }
+      clearStoredSession();
       setUser(null);
     });
-    return () => setUnauthorizedHandler(null);
-  }, []);
+  }
 
   const login = async (username: string, password: string) => {
     setLoading(true);

@@ -1,4 +1,4 @@
-import { getStoredToken } from "./auth";
+import { clearStoredSession, getStoredToken } from "./auth";
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
@@ -13,6 +13,27 @@ let onUnauthorized: (() => void) | null = null;
 
 export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn;
+}
+
+/**
+ * Error de sesión expirada (401/403). Se distingue del resto para que las
+ * pantallas NO lo muestren como cartel: la sesión ya se cerró y la app está
+ * redirigiendo al login, así que pintar un error sería ruido.
+ */
+export class SesionExpiradaError extends Error {
+  constructor(message = "Sesión expirada. Ingresá de nuevo.") {
+    super(message);
+    this.name = "SesionExpiradaError";
+  }
+}
+
+/**
+ * Mensaje a mostrar, o null si el error es de sesión expirada (en ese caso la
+ * app ya está volviendo al login y no hay que pintar nada).
+ */
+export function mensajeError(e: unknown, fallback: string): string | null {
+  if (e instanceof SesionExpiradaError) return null;
+  return e instanceof Error ? e.message : fallback;
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -49,8 +70,12 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (res.status === 401 || res.status === 403) {
-    onUnauthorized?.();
-    throw new Error("Sesión expirada. Ingresá de nuevo.");
+    // Si el handler todavía no está registrado, limpiar igual la sesión: sin
+    // esto el usuario queda con un token muerto en localStorage y la app no
+    // vuelve al login.
+    if (onUnauthorized) onUnauthorized();
+    else clearStoredSession();
+    throw new SesionExpiradaError();
   }
 
   // ORDS puede devolver 200 con {success:false}: también es error.

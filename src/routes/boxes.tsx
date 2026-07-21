@@ -22,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { mensajeError } from "@/lib/api";
 import { esAdmin, useAuth } from "@/lib/auth";
 import { AquaBackground } from "@/components/aqua-background";
 import { actualizarBox, borrarBox, crearBox, listarBoxes, type Box } from "@/lib/servicios";
@@ -64,7 +65,7 @@ function BoxesPage() {
     try {
       setBoxes(await listarBoxes());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudieron cargar los boxes");
+      setError(mensajeError(e, "No se pudieron cargar los boxes"));
     } finally {
       setCargando(false);
     }
