@@ -44,16 +44,6 @@ export const Route = createFileRoute("/home")({
 const GS = new Intl.NumberFormat("es-PY");
 
 // TODO: reemplazar boxes por ocupación real (no hay concepto de "en curso" todavía).
-const RESUMEN = {
-  boxes: [
-    { estado: "ocupado" as const },
-    { estado: "ocupado" as const },
-    { estado: "porLiberarse" as const },
-    { estado: "libre" as const },
-    { estado: "libre" as const },
-  ],
-};
-
 function saludo() {
   const h = new Date().getHours();
   if (h < 12) return "Buen día";
@@ -136,8 +126,6 @@ function HomePage() {
     logout();
     navigate({ to: "/", replace: true });
   };
-
-  const enProceso = RESUMEN.boxes.filter((b) => b.estado !== "libre").length;
 
   const accesos: Array<{
     icon: typeof UserPlus;
@@ -246,7 +234,7 @@ function HomePage() {
             {saludo()}, {user.username}
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground first-letter:uppercase">
-            {fechaLarga()} · {enProceso} vehículos en proceso
+            {fechaLarga()}
           </p>
         </div>
 

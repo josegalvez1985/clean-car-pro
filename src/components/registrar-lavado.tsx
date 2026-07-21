@@ -6,13 +6,7 @@ import { Input } from "@/components/ui/input";
 import { InputMonto } from "@/components/ui/input-monto";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectorModal } from "@/components/selector-modal";
 import {
   crearServicioLavadero,
   listarBoxes,
@@ -210,18 +204,15 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label htmlFor="box">Box</Label>
-          <Select value={idBox} onValueChange={setIdBox}>
-            <SelectTrigger id="box">
-              <SelectValue placeholder="Elegir" />
-            </SelectTrigger>
-            <SelectContent>
-              {boxes.map((b) => (
-                <SelectItem key={b.id_box} value={String(b.id_box)}>
-                  {b.descripcion}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SelectorModal
+            id="box"
+            titulo="Elegir box"
+            placeholder="Elegir"
+            buscarPlaceholder="Buscar box…"
+            valor={idBox}
+            onChange={setIdBox}
+            opciones={boxes.map((b) => ({ valor: String(b.id_box), etiqueta: b.descripcion }))}
+          />
         </div>
 
         <div className="space-y-2">
@@ -239,18 +230,18 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
 
       <div className="space-y-2">
         <Label htmlFor="servicio">Servicio</Label>
-        <Select value={idServicio} onValueChange={onServicioChange}>
-          <SelectTrigger id="servicio">
-            <SelectValue placeholder="Elegir servicio" />
-          </SelectTrigger>
-          <SelectContent>
-            {servicios.map((s) => (
-              <SelectItem key={s.id_servicio} value={String(s.id_servicio)}>
-                {s.descripcion}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SelectorModal
+          id="servicio"
+          titulo="Elegir servicio"
+          placeholder="Elegir servicio"
+          buscarPlaceholder="Buscar servicio…"
+          valor={idServicio}
+          onChange={onServicioChange}
+          opciones={servicios.map((s) => ({
+            valor: String(s.id_servicio),
+            etiqueta: s.descripcion,
+          }))}
+        />
       </div>
 
       <div className="space-y-2">

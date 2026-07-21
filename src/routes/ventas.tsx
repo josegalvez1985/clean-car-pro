@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { mensajeError } from "@/lib/api";
 import { bluetoothDisponible, imprimirTicket } from "@/lib/impresora";
+import { SelectorModal } from "@/components/selector-modal";
 import { esAdmin, useAuth } from "@/lib/auth";
 import { AquaBackground } from "@/components/aqua-background";
 import {
@@ -434,18 +435,18 @@ function VentasPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="box">Box</Label>
-                  <Select value={idBox} onValueChange={setIdBox}>
-                    <SelectTrigger id="box">
-                      <SelectValue placeholder="Elegir" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {boxes.map((b) => (
-                        <SelectItem key={b.id_box} value={String(b.id_box)}>
-                          {b.descripcion}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SelectorModal
+                    id="box"
+                    titulo="Elegir box"
+                    placeholder="Elegir"
+                    buscarPlaceholder="Buscar box…"
+                    valor={idBox}
+                    onChange={setIdBox}
+                    opciones={boxes.map((b) => ({
+                      valor: String(b.id_box),
+                      etiqueta: b.descripcion,
+                    }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="fecha">Fecha</Label>
@@ -462,18 +463,18 @@ function VentasPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="servicio">Servicio</Label>
-                <Select value={idServicio} onValueChange={setIdServicio}>
-                  <SelectTrigger id="servicio">
-                    <SelectValue placeholder="Elegir servicio" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {servicios.map((s) => (
-                      <SelectItem key={s.id_servicio} value={String(s.id_servicio)}>
-                        {s.descripcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SelectorModal
+                  id="servicio"
+                  titulo="Elegir servicio"
+                  placeholder="Elegir servicio"
+                  buscarPlaceholder="Buscar servicio…"
+                  valor={idServicio}
+                  onChange={setIdServicio}
+                  opciones={servicios.map((s) => ({
+                    valor: String(s.id_servicio),
+                    etiqueta: s.descripcion,
+                  }))}
+                />
               </div>
 
               <div className="space-y-2">
