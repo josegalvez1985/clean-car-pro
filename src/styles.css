@@ -247,29 +247,56 @@
 }
 
 /* ---------- Ticket de impresión (57mm) ---------- */
-/* Oculto en pantalla; visible solo al imprimir, y es lo único que se imprime. */
+/* Oculto en pantalla; visible solo al imprimir, y es lo único que se imprime.
+   El ticket se portaliza a <body> (ver ticket-lavado.tsx): dentro del Drawer
+   quedaba bajo un ancestro con `transform`, que crea containing block y le
+   rompe el posicionado. */
+
+:root {
+  --ticket-ancho: 57mm;
+  --ticket-margen: 3mm;
+}
 
 .ticket-imprimir {
   display: none;
 }
 
+/* Rollo continuo: la altura la define el contenido, no una hoja A4.
+   Va literal y no var(--ticket-ancho): @page se resuelve fuera del contexto
+   del documento y descarta la regla si encuentra una variable CSS. Si cambiás
+   el ancho, cambialo también acá. */
+@page {
+  size: 57mm auto;
+  margin: 0;
+}
+
 @media print {
-  body * {
-    visibility: hidden;
+  /* display:none y no visibility:hidden — las cajas ocultas seguían ocupando
+     su lugar en el flujo y salían centímetros de papel en blanco. */
+  #root {
+    display: none !important;
   }
-  .ticket-imprimir,
-  .ticket-imprimir * {
-    visibility: visible;
+
+  html,
+  body {
+    width: var(--ticket-ancho);
+    margin: 0;
+    padding: 0;
+    background: #fff;
   }
+
   .ticket-imprimir {
     display: block;
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 57mm;
-    padding: 3mm;
+    width: var(--ticket-ancho);
+    padding: var(--ticket-margen);
+    box-sizing: border-box;
     color: #000;
     background: #fff;
     font-family: "Courier New", monospace;
+  }
+
+  /* Una térmica no debe cortar el ticket a la mitad. */
+  .ticket-imprimir * {
+    break-inside: avoid;
   }
 }

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BoxesRouteImport } from './routes/boxes'
+import { Route as CuentaRouteImport } from './routes/cuenta'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as ServiciosRouteImport } from './routes/servicios'
 import { Route as VentasRouteImport } from './routes/ventas'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const BoxesRoute = BoxesRouteImport.update({
   id: '/boxes',
   path: '/boxes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CuentaRoute = CuentaRouteImport.update({
+  id: '/cuenta',
+  path: '/cuenta',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HomeRoute = HomeRouteImport.update({
@@ -44,6 +50,7 @@ const VentasRoute = VentasRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/boxes': typeof BoxesRoute
+  '/cuenta': typeof CuentaRoute
   '/home': typeof HomeRoute
   '/servicios': typeof ServiciosRoute
   '/ventas': typeof VentasRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/boxes': typeof BoxesRoute
+  '/cuenta': typeof CuentaRoute
   '/home': typeof HomeRoute
   '/servicios': typeof ServiciosRoute
   '/ventas': typeof VentasRoute
@@ -59,21 +67,24 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/boxes': typeof BoxesRoute
+  '/cuenta': typeof CuentaRoute
   '/home': typeof HomeRoute
   '/servicios': typeof ServiciosRoute
   '/ventas': typeof VentasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/boxes' | '/home' | '/servicios' | '/ventas'
+  fullPaths: '/' | '/boxes' | '/cuenta' | '/home' | '/servicios' | '/ventas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/boxes' | '/home' | '/servicios' | '/ventas'
-  id: '__root__' | '/' | '/boxes' | '/home' | '/servicios' | '/ventas'
+  to: '/' | '/boxes' | '/cuenta' | '/home' | '/servicios' | '/ventas'
+  id:
+    '__root__' | '/' | '/boxes' | '/cuenta' | '/home' | '/servicios' | '/ventas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BoxesRoute: typeof BoxesRoute
+  CuentaRoute: typeof CuentaRoute
   HomeRoute: typeof HomeRoute
   ServiciosRoute: typeof ServiciosRoute
   VentasRoute: typeof VentasRoute
@@ -93,6 +104,13 @@ declare module '@tanstack/react-router' {
       path: '/boxes'
       fullPath: '/boxes'
       preLoaderRoute: typeof BoxesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cuenta': {
+      id: '/cuenta'
+      path: '/cuenta'
+      fullPath: '/cuenta'
+      preLoaderRoute: typeof CuentaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home': {
@@ -122,6 +140,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BoxesRoute: BoxesRoute,
+  CuentaRoute: CuentaRoute,
   HomeRoute: HomeRoute,
   ServiciosRoute: ServiciosRoute,
   VentasRoute: VentasRoute,

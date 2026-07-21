@@ -385,7 +385,12 @@ function HomePage() {
               activo: false,
               onClick: () => navigate({ to: "/boxes" }),
             },
-            { icon: UserIcon, label: "Cuenta", activo: false, onClick: undefined },
+            {
+              icon: UserIcon,
+              label: "Cuenta",
+              activo: false,
+              onClick: () => navigate({ to: "/cuenta" }),
+            },
           ].map((t) => (
             <button
               key={t.label}
@@ -405,7 +410,9 @@ function HomePage() {
         </div>
       </nav>
 
-      <Drawer open={altaAbierta} onOpenChange={setAltaAbierta}>
+      {/* shouldScaleBackground aplica transform al body y rompe el posicionado
+          del ticket al imprimir. */}
+      <Drawer open={altaAbierta} onOpenChange={setAltaAbierta} shouldScaleBackground={false}>
         <DrawerContent>
           <div className="mx-auto w-full max-w-md overflow-y-auto px-4 pb-8">
             <DrawerHeader className="px-0 text-left">
