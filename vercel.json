@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "VITE_API_URL=/api VITE_BASE_PATH=/ npm run build",
   "outputDirectory": "dist",
   "rewrites": [
     {
