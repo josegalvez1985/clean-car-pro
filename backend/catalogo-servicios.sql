@@ -9,6 +9,7 @@
 --   estado         VARCHAR2(1)   -> 'A' activo / 'I' inactivo
 --   precio         NUMBER
 --   porc_comision  NUMBER
+--   ind_impreso    VARCHAR2(1)   -> 'S' imprimió ticket / 'N' no (default 'N')
 --
 -- NOTA: el catálogo también se lee desde /servicios (ver servicios.sql), que
 -- alimenta el selector del alta de lavados. Ese endpoint sigue existiendo; acá
@@ -23,11 +24,17 @@ CREATE OR REPLACE PACKAGE PKG_CATALOGO_CLEANCAR AS
   PROCEDURE OBTENER(p_token IN VARCHAR2, p_id_servicio IN NUMBER);
   PROCEDURE INSERTAR(
       p_token IN VARCHAR2, p_descripcion IN VARCHAR2, p_estado IN VARCHAR2,
-      p_precio IN NUMBER, p_porc_comision IN NUMBER);
+      p_precio IN NUMBER, p_porc_comision IN NUMBER, p_ind_impreso IN VARCHAR2);
   PROCEDURE ACTUALIZAR(
       p_token IN VARCHAR2, p_id_servicio IN NUMBER, p_descripcion IN VARCHAR2,
-      p_estado IN VARCHAR2, p_precio IN NUMBER, p_porc_comision IN NUMBER);
+      p_estado IN VARCHAR2, p_precio IN NUMBER, p_porc_comision IN NUMBER,
+      p_ind_impreso IN VARCHAR2);
   PROCEDURE ELIMINAR(p_token IN VARCHAR2, p_id_servicio IN NUMBER);
+
+  -- Marca si el ticket del servicio se imprimió ('S') o no ('N'). No exige
+  -- admin: cualquier operador imprime tickets.
+  PROCEDURE MARCAR_IMPRESO(
+      p_token IN VARCHAR2, p_id_servicio IN NUMBER, p_ind_impreso IN VARCHAR2);
 
 END PKG_CATALOGO_CLEANCAR;
 /
@@ -48,6 +55,13 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
     RETURN CC_AUTH.VALIDAR_TOKEN(p_token);
   END f_usuario;
 
+  -- Verificación de admin local: la base tiene una versión de CC_AUTH sin
+  -- es_admin, así que no se depende de ella. Misma lista que cc_auth.es_admin.
+  FUNCTION f_es_admin(p_usuario IN VARCHAR2) RETURN BOOLEAN IS
+  BEGIN
+    RETURN UPPER(p_usuario) IN ('JOSEG', 'EVAC');
+  END f_es_admin;
+
   --------------------------------------------------------------------------
   -- LISTAR
   --------------------------------------------------------------------------
@@ -64,7 +78,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
     APEX_JSON.WRITE('success', TRUE);
     APEX_JSON.OPEN_ARRAY('data');
     FOR r IN (
-        SELECT id_servicio, descripcion, estado, precio, porc_comision
+        SELECT id_servicio, descripcion, estado, precio, porc_comision, ind_impreso
           FROM servicios_lav
          ORDER BY descripcion
     ) LOOP
@@ -74,6 +88,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
       APEX_JSON.WRITE('estado', r.estado);
       APEX_JSON.WRITE('precio', r.precio);
       APEX_JSON.WRITE('porc_comision', r.porc_comision);
+      APEX_JSON.WRITE('ind_impreso', r.ind_impreso);
       APEX_JSON.CLOSE_OBJECT;
     END LOOP;
     APEX_JSON.CLOSE_ARRAY;
@@ -114,6 +129,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
     APEX_JSON.WRITE('estado', l_row.estado);
     APEX_JSON.WRITE('precio', l_row.precio);
     APEX_JSON.WRITE('porc_comision', l_row.porc_comision);
+    APEX_JSON.WRITE('ind_impreso', l_row.ind_impreso);
     APEX_JSON.CLOSE_OBJECT;
     APEX_JSON.CLOSE_OBJECT;
   EXCEPTION
@@ -126,7 +142,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
   --------------------------------------------------------------------------
   PROCEDURE INSERTAR(
       p_token IN VARCHAR2, p_descripcion IN VARCHAR2, p_estado IN VARCHAR2,
-      p_precio IN NUMBER, p_porc_comision IN NUMBER) IS
+      p_precio IN NUMBER, p_porc_comision IN NUMBER, p_ind_impreso IN VARCHAR2) IS
     l_usuario     VARCHAR2(255);
     l_id_servicio servicios_lav.id_servicio%TYPE;
   BEGIN
@@ -145,9 +161,10 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
       RETURN;
     END IF;
 
-    -- estado y porc_comision son NOT NULL: si no vienen, valores por defecto.
-    INSERT INTO servicios_lav (descripcion, estado, precio, porc_comision)
-    VALUES (p_descripcion, NVL(p_estado, 'A'), p_precio, NVL(p_porc_comision, 0))
+    -- estado, porc_comision e ind_impreso son NOT NULL: si no vienen, defaults.
+    INSERT INTO servicios_lav (descripcion, estado, precio, porc_comision, ind_impreso)
+    VALUES (p_descripcion, NVL(p_estado, 'A'), p_precio, NVL(p_porc_comision, 0),
+            NVL(p_ind_impreso, 'N'))
     RETURNING id_servicio INTO l_id_servicio;
     COMMIT;
 
@@ -168,7 +185,8 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
   --------------------------------------------------------------------------
   PROCEDURE ACTUALIZAR(
       p_token IN VARCHAR2, p_id_servicio IN NUMBER, p_descripcion IN VARCHAR2,
-      p_estado IN VARCHAR2, p_precio IN NUMBER, p_porc_comision IN NUMBER) IS
+      p_estado IN VARCHAR2, p_precio IN NUMBER, p_porc_comision IN NUMBER,
+      p_ind_impreso IN VARCHAR2) IS
     l_usuario VARCHAR2(255);
   BEGIN
     l_usuario := f_usuario(p_token);
@@ -176,7 +194,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
       p_error(401, 'Unauthorized', 'Token invalido o expirado');
       RETURN;
     END IF;
-    IF NOT CC_AUTH.ES_ADMIN(l_usuario) THEN
+    IF NOT f_es_admin(l_usuario) THEN
       p_error(403, 'Forbidden', 'No tenes permiso para modificar registros');
       RETURN;
     END IF;
@@ -194,7 +212,10 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
        SET descripcion   = p_descripcion,
            estado        = NVL(p_estado, 'A'),
            precio        = p_precio,
-           porc_comision = NVL(p_porc_comision, 0)
+           porc_comision = NVL(p_porc_comision, 0),
+           -- ind_impreso es automático (se setea al imprimir): si no viene, se
+           -- preserva el valor actual en vez de pisarlo.
+           ind_impreso   = NVL(p_ind_impreso, ind_impreso)
      WHERE id_servicio = p_id_servicio;
 
     IF SQL%ROWCOUNT = 0 THEN
@@ -225,7 +246,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
       p_error(401, 'Unauthorized', 'Token invalido o expirado');
       RETURN;
     END IF;
-    IF NOT CC_AUTH.ES_ADMIN(l_usuario) THEN
+    IF NOT f_es_admin(l_usuario) THEN
       p_error(403, 'Forbidden', 'No tenes permiso para eliminar registros');
       RETURN;
     END IF;
@@ -254,6 +275,45 @@ CREATE OR REPLACE PACKAGE BODY PKG_CATALOGO_CLEANCAR AS
       END IF;
   END ELIMINAR;
 
+  --------------------------------------------------------------------------
+  -- MARCAR_IMPRESO (solo actualiza ind_impreso; no exige admin)
+  --------------------------------------------------------------------------
+  PROCEDURE MARCAR_IMPRESO(
+      p_token IN VARCHAR2, p_id_servicio IN NUMBER, p_ind_impreso IN VARCHAR2) IS
+    l_usuario VARCHAR2(255);
+    l_ind     VARCHAR2(1);
+  BEGIN
+    l_usuario := f_usuario(p_token);
+    IF l_usuario IS NULL THEN
+      p_error(401, 'Unauthorized', 'Token invalido o expirado');
+      RETURN;
+    END IF;
+
+    l_ind := UPPER(p_ind_impreso);
+    IF l_ind NOT IN ('S', 'N') THEN
+      p_error(400, 'Bad Request', 'ind_impreso debe ser S o N');
+      RETURN;
+    END IF;
+
+    UPDATE servicios_lav SET ind_impreso = l_ind WHERE id_servicio = p_id_servicio;
+
+    IF SQL%ROWCOUNT = 0 THEN
+      ROLLBACK;
+      p_error(404, 'Not Found', 'Servicio no encontrado');
+      RETURN;
+    END IF;
+    COMMIT;
+
+    APEX_JSON.OPEN_OBJECT;
+    APEX_JSON.WRITE('success', TRUE);
+    APEX_JSON.WRITE('message', 'Estado de impresion actualizado');
+    APEX_JSON.CLOSE_OBJECT;
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      p_error(500, 'Internal Server Error', 'Error: ' || SQLERRM);
+  END MARCAR_IMPRESO;
+
 END PKG_CATALOGO_CLEANCAR;
 /
 
@@ -265,6 +325,7 @@ END PKG_CATALOGO_CLEANCAR;
 --   POST   /api/catalogo-servicios       -> insertar
 --   PUT    /api/catalogo-servicios/:id   -> actualizar
 --   DELETE /api/catalogo-servicios/:id   -> eliminar
+--   PUT    /api/catalogo-servicios/:id/impreso -> marcar ind_impreso (S/N)
 --
 -- Se usa 'catalogo-servicios' y no 'servicios' porque /servicios ya está
 -- tomado por el endpoint de solo lectura que alimenta el selector del alta.
@@ -276,6 +337,7 @@ BEGIN
   BEGIN ORDS.DELETE_HANDLER('cleancar.api', 'catalogo-servicios/:id', 'GET');    EXCEPTION WHEN OTHERS THEN NULL; END;
   BEGIN ORDS.DELETE_HANDLER('cleancar.api', 'catalogo-servicios/:id', 'PUT');    EXCEPTION WHEN OTHERS THEN NULL; END;
   BEGIN ORDS.DELETE_HANDLER('cleancar.api', 'catalogo-servicios/:id', 'DELETE'); EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN ORDS.DELETE_HANDLER('cleancar.api', 'catalogo-servicios/:id/impreso', 'PUT'); EXCEPTION WHEN OTHERS THEN NULL; END;
 
   ----------------------------------------------------------------------------
   -- /catalogo-servicios
@@ -323,7 +385,8 @@ BEGIN
         p_descripcion   => :descripcion,
         p_estado        => :estado,
         p_precio        => TO_NUMBER(:precio),
-        p_porc_comision => TO_NUMBER(:porc_comision));
+        p_porc_comision => TO_NUMBER(:porc_comision),
+        p_ind_impreso   => :ind_impreso);
 END;
 ~');
   ORDS.DEFINE_PARAMETER(p_module_name => 'cleancar.api', p_pattern => 'catalogo-servicios', p_method => 'POST',
@@ -377,7 +440,8 @@ BEGIN
         p_descripcion   => :descripcion,
         p_estado        => :estado,
         p_precio        => TO_NUMBER(:precio),
-        p_porc_comision => TO_NUMBER(:porc_comision));
+        p_porc_comision => TO_NUMBER(:porc_comision),
+        p_ind_impreso   => :ind_impreso);
 END;
 ~');
   ORDS.DEFINE_PARAMETER(p_module_name => 'cleancar.api', p_pattern => 'catalogo-servicios/:id', p_method => 'PUT',
@@ -401,6 +465,37 @@ BEGIN
 END;
 ~');
   ORDS.DEFINE_PARAMETER(p_module_name => 'cleancar.api', p_pattern => 'catalogo-servicios/:id', p_method => 'DELETE',
+      p_name => 'Authorization', p_bind_variable_name => 'authorization',
+      p_source_type => 'HEADER', p_param_type => 'STRING', p_access_method => 'IN');
+
+  ----------------------------------------------------------------------------
+  -- /catalogo-servicios/:id/impreso  (marcar ind_impreso al imprimir el ticket)
+  ----------------------------------------------------------------------------
+  BEGIN
+    ORDS.DEFINE_TEMPLATE(p_module_name => 'cleancar.api', p_pattern => 'catalogo-servicios/:id/impreso',
+        p_priority => 0, p_etag_type => 'HASH', p_comments => NULL);
+  EXCEPTION WHEN OTHERS THEN NULL; END;
+
+  ORDS.DEFINE_HANDLER(
+      p_module_name => 'cleancar.api', p_pattern => 'catalogo-servicios/:id/impreso', p_method => 'PUT',
+      p_source_type => 'plsql/block',
+      p_source      => q'~
+DECLARE l_token VARCHAR2(256); l_pos PLS_INTEGER;
+BEGIN
+    OWA_UTIL.MIME_HEADER('application/json', FALSE);
+    OWA_UTIL.HTTP_HEADER_CLOSE;
+    l_token := :authorization;
+    IF l_token IS NOT NULL THEN
+        l_pos := INSTR(UPPER(l_token), 'BEARER ');
+        IF l_pos > 0 THEN l_token := TRIM(SUBSTR(l_token, l_pos + 7)); END IF;
+    END IF;
+    PKG_CATALOGO_CLEANCAR.MARCAR_IMPRESO(
+        p_token       => l_token,
+        p_id_servicio => TO_NUMBER(:id),
+        p_ind_impreso => :ind_impreso);
+END;
+~');
+  ORDS.DEFINE_PARAMETER(p_module_name => 'cleancar.api', p_pattern => 'catalogo-servicios/:id/impreso', p_method => 'PUT',
       p_name => 'Authorization', p_bind_variable_name => 'authorization',
       p_source_type => 'HEADER', p_param_type => 'STRING', p_access_method => 'IN');
 

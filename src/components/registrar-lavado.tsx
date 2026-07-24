@@ -11,6 +11,7 @@ import {
   crearServicioLavadero,
   listarBoxes,
   listarServicios,
+  marcarImpreso,
   type Box,
   type Servicio,
 } from "@/lib/servicios";
@@ -43,6 +44,7 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
   const [saving, setSaving] = useState(false);
   const [ticket, setTicket] = useState<DatosTicket | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [yaImpreso, setYaImpreso] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -108,7 +110,9 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
         precio: Number(precio),
       });
       toast.success("Servicio registrado");
+      setYaImpreso(false);
       setTicket({
+        id_servicio: Number(idServicio),
         fecha,
         box: box?.descripcion ?? "",
         servicio: servicio?.descripcion ?? "",
@@ -148,15 +152,29 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
    * Impresión directa por Bluetooth. Sin soporte (iOS, Firefox) se cae al
    * diálogo del navegador, que usa el ticket oculto de <TicketLavado>.
    */
+  // Marca ind_impreso del servicio (automático, sin UI). No bloquea el flujo:
+  // si el backend falla, el ticket ya se imprimió igual.
+  const marcar = async (ind: "S" | "N") => {
+    if (!ticket) return;
+    try {
+      await marcarImpreso(ticket.id_servicio, ind);
+      setYaImpreso(true);
+    } catch {
+      /* ignorar: el marcado es secundario a la impresión */
+    }
+  };
+
   const onImprimir = async () => {
     if (!bluetoothDisponible()) {
       window.print();
+      void marcar("S");
       return;
     }
     setImprimiendo(true);
     try {
       await imprimirTicket(ticket!);
       toast.success("Ticket enviado a la impresora");
+      void marcar("S");
     } catch (err) {
       // Cancelar el selector de dispositivos no es un error que valga avisar.
       if (err instanceof DOMException && err.name === "NotFoundError") return;
@@ -164,6 +182,11 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
     } finally {
       setImprimiendo(false);
     }
+  };
+
+  const onListo = async () => {
+    if (ticket && !yaImpreso) await marcar("N");
+    onDone?.();
   };
 
   if (ticket) {
@@ -191,7 +214,11 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
             )}
             {imprimiendo ? "Imprimiendo…" : "Imprimir"}
           </Button>
-          <Button type="button" className="h-12 flex-1 text-base" onClick={onDone}>
+          <Button
+            type="button"
+            className="h-12 flex-1 text-base"
+            onClick={() => void onListo()}
+          >
             Listo
           </Button>
         </div>

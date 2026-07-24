@@ -58,9 +58,12 @@ export interface Servicio {
   /** Precio de lista: el formulario lo autocompleta al elegir el servicio. */
   precio: number;
   porc_comision: number;
+  /** 'S' si se imprimió el ticket / 'N' si no. Solo lo devuelve /catalogo-servicios. */
+  ind_impreso?: string;
 }
 
-/** Campos editables del catálogo. Todos son NOT NULL en la tabla. */
+/** Campos editables del catálogo. Todos son NOT NULL en la tabla.
+ * ind_impreso no está: se setea solo, automáticamente al imprimir el ticket. */
 export interface DatosServicio {
   descripcion: string;
   estado: string;
@@ -94,6 +97,14 @@ export async function actualizarServicio(id: number, datos: DatosServicio) {
 
 export async function borrarServicio(id: number) {
   return request<Envelope<never>>(`/catalogo-servicios/${id}`, { method: "DELETE" });
+}
+
+/** Marca si el ticket del servicio se imprimió ('S') o no ('N'). No exige admin. */
+export async function marcarImpreso(id: number, indImpreso: "S" | "N") {
+  return request<Envelope<never>>(`/catalogo-servicios/${id}/impreso`, {
+    method: "PUT",
+    body: JSON.stringify({ ind_impreso: indImpreso }),
+  });
 }
 
 /* ----------------------------------------------------- SERVICIOS_LAVADERO */

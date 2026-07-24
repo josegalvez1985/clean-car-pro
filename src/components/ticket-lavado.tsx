@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 const GS = new Intl.NumberFormat("es-PY");
 
 export interface DatosTicket {
+  /** Servicio del catálogo: se usa para marcar ind_impreso al imprimir. */
+  id_servicio: number;
   fecha: string;
   box: string;
   servicio: string;
