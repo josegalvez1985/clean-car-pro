@@ -1,13 +1,11 @@
 import { useMemo, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+/** A partir de esta cantidad de opciones se muestra el buscador. */
+const UMBRAL_BUSCADOR = 8;
 
 export interface OpcionSelector {
   valor: string;
@@ -16,8 +14,9 @@ export interface OpcionSelector {
 
 /**
  * Campo tipo <select> que abre un drawer a pantalla con buscador, en vez del
- * dropdown chico de Radix. Es más fácil de tocar en el celular (cada opción es
- * una fila grande) y filtra al tipear cuando la lista es larga.
+ * dropdown chico de Radix. Las opciones se muestran como botones en grilla
+ * (no como lista), más fáciles de tocar en el celular; el buscador aparece
+ * solo cuando hay muchas.
  *
  * Controlado: `valor` es el `valor` de la opción elegida (o "" si no hay).
  */
@@ -82,41 +81,47 @@ export function SelectorModal({
               <DrawerTitle>{titulo}</DrawerTitle>
             </DrawerHeader>
 
-            <div className="relative mb-3">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                autoFocus
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder={buscarPlaceholder}
-                className="pl-9"
-              />
-            </div>
+            {/* Con pocas opciones el buscador es ruido: entran todas en pantalla. */}
+            {opciones.length > UMBRAL_BUSCADOR && (
+              <div className="relative mb-3">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder={buscarPlaceholder}
+                  className="pl-9"
+                />
+              </div>
+            )}
 
-            <div className="max-h-[50vh] overflow-y-auto">
+            <div className="max-h-[55vh] overflow-y-auto">
               {filtradas.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Sin resultados
-                </p>
+                <p className="py-8 text-center text-sm text-muted-foreground">Sin resultados</p>
               ) : (
-                filtradas.map((o) => {
-                  const activa = o.valor === valor;
-                  return (
-                    <button
-                      key={o.valor}
-                      type="button"
-                      onClick={() => elegir(o.valor)}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-3.5 text-left text-base",
-                        "hover:bg-accent active:bg-accent",
-                        activa && "bg-accent font-medium",
-                      )}
-                    >
-                      <span className="min-w-0 truncate">{o.etiqueta}</span>
-                      {activa && <Check className="h-4 w-4 shrink-0 text-primary" />}
-                    </button>
-                  );
-                })
+                <div className="grid grid-cols-2 gap-2.5 p-0.5">
+                  {filtradas.map((o) => {
+                    const activa = o.valor === valor;
+                    return (
+                      <button
+                        key={o.valor}
+                        type="button"
+                        onClick={() => elegir(o.valor)}
+                        className={cn(
+                          "relative flex min-h-20 items-center justify-center rounded-2xl border px-3 py-4 text-center text-sm font-medium",
+                          "border-border/60 bg-card/70 backdrop-blur transition-colors",
+                          "hover:border-primary/50 hover:bg-accent active:scale-[0.98]",
+                          activa && "border-primary bg-primary/10 text-primary",
+                        )}
+                      >
+                        <span className="line-clamp-3">{o.etiqueta}</span>
+                        {activa && (
+                          <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>

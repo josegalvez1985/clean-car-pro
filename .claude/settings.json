@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npx vercel *)",
       "Bash(VITE_API_URL=/api VITE_BASE_PATH=/ npm run build)",
-      "Bash(npm -v)"
+      "Bash(npm -v)",
+      "Bash(npx prettier *)",
+      "Bash(npx eslint *)"
     ]
   }
 }
