@@ -19,6 +19,7 @@ import { TicketLavado, type DatosTicket } from "@/components/ticket-lavado";
 import { bluetoothDisponible, imprimirTicket } from "@/lib/impresora";
 
 const COMENTARIO_MAX = 500;
+const GS = new Intl.NumberFormat("es-PY");
 
 function todayISO() {
   const d = new Date();
@@ -214,11 +215,7 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
             )}
             {imprimiendo ? "Imprimiendo…" : "Imprimir"}
           </Button>
-          <Button
-            type="button"
-            className="h-12 flex-1 text-base"
-            onClick={() => void onListo()}
-          >
+          <Button type="button" className="h-12 flex-1 text-base" onClick={() => void onListo()}>
             Listo
           </Button>
         </div>
@@ -267,6 +264,7 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
           opciones={servicios.map((s) => ({
             valor: String(s.id_servicio),
             etiqueta: s.descripcion,
+            detalle: `${GS.format(s.precio)} Gs`,
           }))}
         />
       </div>

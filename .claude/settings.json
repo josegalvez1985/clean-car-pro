@@ -5,7 +5,8 @@
       "Bash(VITE_API_URL=/api VITE_BASE_PATH=/ npm run build)",
       "Bash(npm -v)",
       "Bash(npx prettier *)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "PowerShell(Get-ChildItem -Recurse -File src,backend,scripts | Select-Object @{n='p';e={$_.FullName.Replace\\($PWD.Path+'\\\\',''\\)}},@{n='kb';e={[math]::Round\\($_.Length/1kb,1\\)}} | Format-Table -AutoSize)"
     ]
   }
 }

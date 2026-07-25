@@ -10,6 +10,8 @@ const UMBRAL_BUSCADOR = 8;
 export interface OpcionSelector {
   valor: string;
   etiqueta: string;
+  /** Dato secundario bajo la etiqueta (p.ej. el precio del servicio). */
+  detalle?: string;
 }
 
 /**
@@ -108,13 +110,23 @@ export function SelectorModal({
                         type="button"
                         onClick={() => elegir(o.valor)}
                         className={cn(
-                          "relative flex min-h-20 items-center justify-center rounded-2xl border px-3 py-4 text-center text-sm font-medium",
+                          "relative flex min-h-20 flex-col items-center justify-center gap-1 rounded-2xl border px-3 py-4 text-center text-sm font-medium",
                           "border-border/60 bg-card/70 backdrop-blur transition-colors",
                           "hover:border-primary/50 hover:bg-accent active:scale-[0.98]",
                           activa && "border-primary bg-primary/10 text-primary",
                         )}
                       >
                         <span className="line-clamp-3">{o.etiqueta}</span>
+                        {o.detalle && (
+                          <span
+                            className={cn(
+                              "text-xs font-normal tabular-nums",
+                              activa ? "text-primary" : "text-muted-foreground",
+                            )}
+                          >
+                            {o.detalle}
+                          </span>
+                        )}
                         {activa && (
                           <Check className="absolute right-2 top-2 h-4 w-4 text-primary" />
                         )}
