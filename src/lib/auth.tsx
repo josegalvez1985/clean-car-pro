@@ -19,6 +19,19 @@ export function esAdmin(user: AuthUser | null): boolean {
   return !!user && ADMINS.includes(user.username.toUpperCase());
 }
 
+/**
+ * El backend rechazó usuario/contraseña. Se distingue de un fallo de red o de
+ * un 500 para que el login biométrico sepa cuándo las credenciales guardadas
+ * quedaron obsoletas (y hay que borrarlas) y cuándo el problema es pasajero
+ * (y borrarlas sería perder la biometría por una caída del servidor).
+ */
+export class CredencialesInvalidasError extends Error {
+  constructor(message = "Usuario o contraseña inválidos") {
+    super(message);
+    this.name = "CredencialesInvalidasError";
+  }
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
@@ -163,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // ORDS puede responder 200 con success:false; también es un fallo.
         if (res.status === 401 || data.success === false) {
-          throw new Error(data.error ?? data.message ?? "Usuario o contraseña inválidos");
+          throw new CredencialesInvalidasError(data.error ?? data.message ?? undefined);
         }
         if (!res.ok || !data.token) {
           throw new Error(data.error ?? data.message ?? "Error al iniciar sesión");

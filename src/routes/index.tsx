@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useAuth } from "@/lib/auth";
+import { CredencialesInvalidasError, useAuth } from "@/lib/auth";
 import { AquaBackground } from "@/components/aqua-background";
 import { InstallButton } from "@/components/install-button";
 import {
@@ -86,10 +86,17 @@ function LoginPage() {
       await login(creds.username, creds.password);
       toast.success("Bienvenido a Clean Car");
       navigate({ to: "/home", replace: true });
-    } catch {
-      toast.error("El acceso guardado ya no es válido, ingresá de nuevo");
-      clearCreds();
-      setCanBiometric(false);
+    } catch (err) {
+      // Solo se borran las credenciales si el backend las rechazó (cambió la
+      // contraseña). Ante un fallo de red o un 500 se conservan: borrarlas
+      // obligaría a reconfigurar la biometría cada vez que el servidor tose.
+      if (err instanceof CredencialesInvalidasError) {
+        toast.error("El acceso guardado ya no es válido, ingresá de nuevo");
+        clearCreds();
+        setCanBiometric(false);
+      } else {
+        toast.error(err instanceof Error ? err.message : "No se pudo iniciar sesión");
+      }
     } finally {
       setBusy(false);
     }
