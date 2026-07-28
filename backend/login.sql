@@ -276,18 +276,18 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 
-  -- OJO: delete_module (arriba) borra también los origenes CORS del modulo. Por
-  -- eso se pasan acá, en la misma llamada que lo recrea: si el script se corta
-  -- antes del paso 4/5, el modulo igual queda con la lista blanca puesta. Sin
-  -- esto, el modulo existe unos instantes sin CORS y todo responde 403
-  -- "failed cross origin request validation" — se nota primero en el login,
-  -- que es un POST con Content-Type: application/json y dispara preflight.
+  -- OJO: delete_module (arriba) borra también los origenes CORS del modulo, así
+  -- que entre esta llamada y el paso 4/5 el modulo queda unos instantes sin
+  -- CORS y todo responde 403 "failed cross origin request validation" — se nota
+  -- primero en el login, que es un POST con Content-Type: application/json y
+  -- dispara preflight. No se puede evitar pasando p_origins_allowed acá:
+  -- define_module no acepta ese parametro (PLS-00306), solo lo acepta
+  -- set_module_origins_allowed. Por eso el paso 4/5 no es opcional.
   ords.define_module(
     p_module_name     => 'cleancar.api',
     p_base_path       => 'api/',
     p_items_per_page  => 0,
     p_status          => 'PUBLISHED',
-    p_origins_allowed => 'https://josegalvez1985.github.io,http://localhost:8080,http://192.168.100.16:8080',
     p_comments        => 'Clean Car — autenticación por token'
   );
 
@@ -384,9 +384,10 @@ END;
 PROMPT ============================================================
 PROMPT  4/5  CORS (ajustá los orígenes permitidos)
 PROMPT ============================================================
--- Redundante con el p_origins_allowed del paso 3/5, y a propósito: este bloque
--- es el que se reejecuta cuando cambia un origen (una IP de LAN por DHCP, un
--- dominio nuevo) sin querer recrear el módulo entero.
+-- Este bloque es el ÚNICO que carga el CORS del módulo (define_module no acepta
+-- p_origins_allowed), así que no se puede saltear. También es el que se
+-- reejecuta cuando cambia un origen (una IP de LAN por DHCP, un dominio nuevo)
+-- sin querer recrear el módulo entero.
 --
 -- No agregar handlers OPTIONS a mano: con origins_allowed cargado, ORDS
 -- responde el preflight solo. Un handler propio duplica los headers CORS

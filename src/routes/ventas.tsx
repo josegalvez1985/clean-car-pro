@@ -57,8 +57,14 @@ const COMENTARIO_MAX = 500;
 const TAM_PAGINA = 30;
 const GS = new Intl.NumberFormat("es-PY");
 
+/** Hoy en YYYY-MM-DD, en hora local (toISOString a secas se corre un día). */
+function hoyISO() {
+  const ahora = new Date();
+  return new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
 const COLUMNAS: Columna<ServicioLavadero>[] = [
-  { campo: "fecha", titulo: "Fecha" },
+  { campo: "hora", titulo: "Hora" },
   { campo: "box", titulo: "Box" },
   { campo: "servicio", titulo: "Servicio" },
   { campo: "precio", titulo: "Precio", numerica: true },
@@ -71,6 +77,7 @@ function VentasPage() {
 
   const [ventas, setVentas] = useState<ServicioLavadero[]>([]);
   const [total, setTotal] = useState(0);
+  const [facturado, setFacturado] = useState(0);
   const [pagina, setPagina] = useState(1);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [imprimiendoId, setImprimiendoId] = useState<number | null>(null);
@@ -80,7 +87,9 @@ function VentasPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [filtroBox, setFiltroBox] = useState("");
-  const [filtroFecha, setFiltroFecha] = useState("");
+  // Arranca en hoy ("Servicios del día", como lo llama el acceso del home).
+  // Vaciar el campo trae el mes en curso, que es el default del backend.
+  const [filtroFecha, setFiltroFecha] = useState(hoyISO());
 
   const [editando, setEditando] = useState<ServicioLavadero | null>(null);
   const [formAbierto, setFormAbierto] = useState(false);
@@ -96,7 +105,7 @@ function VentasPage() {
 
   const { busqueda, setBusqueda, campo, direccion, ordenarPor, resultado } = useTabla(
     ventas,
-    "fecha",
+    "hora",
   );
 
   const cargar = useCallback(async () => {
@@ -117,6 +126,7 @@ function VentasPage() {
       ]);
       setVentas(v.data);
       setTotal(v.total);
+      setFacturado(v.totalFacturado);
       setBoxes(b);
       setServicios(s);
     } catch (e) {
@@ -155,10 +165,11 @@ function VentasPage() {
     void cargar();
   }, [user, restaurando, navigate, cargar]);
 
-  const totalFacturado = useMemo(
-    () => resultado.reduce((acc, v) => acc + v.precio, 0),
-    [resultado],
-  );
+  // Sin búsqueda, el total es el del filtro completo (lo manda el backend), no
+  // el de las páginas cargadas: si no, "Mostrar más" lo hacía subir. Con
+  // búsqueda solo se puede sumar lo que está en memoria.
+  const totalFiltrado = useMemo(() => resultado.reduce((acc, v) => acc + v.precio, 0), [resultado]);
+  const totalFacturado = busqueda ? totalFiltrado : facturado;
 
   if (restaurando || !user) return null;
 
@@ -222,6 +233,8 @@ function VentasPage() {
         id_box: Number(idBox),
         id_servicio: Number(idServicio),
         fecha,
+        // Se reenvía la hora original: el form solo edita el día.
+        hora: editando.hora,
         comentario: comentarioFinal,
         precio: Number(precio),
       });
@@ -342,7 +355,7 @@ function VentasPage() {
             />
             <div className="mb-3 flex items-baseline justify-between rounded-xl border border-border/60 bg-card/70 px-3.5 py-2.5 backdrop-blur">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Total {busqueda ? "(filtrado)" : "cargado"}
+                Total {busqueda ? "(filtrado)" : "del período"}
               </span>
               <span className="text-sm font-bold tabular-nums">{GS.format(totalFacturado)}</span>
             </div>
@@ -366,7 +379,7 @@ function VentasPage() {
                   <span className="flex min-w-0 flex-1 flex-col leading-tight">
                     <b className="truncate text-sm font-semibold">{v.servicio}</b>
                     <span className="truncate text-xs text-muted-foreground">
-                      {v.box} · {v.fecha}
+                      {v.box} · {v.hora}
                     </span>
                   </span>
                   <span className="flex-none text-sm font-bold tabular-nums">

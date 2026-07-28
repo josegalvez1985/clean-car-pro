@@ -93,18 +93,20 @@ function HomePage() {
   const cargarResumenHoy = () => {
     const hoy = fechaISO(new Date());
     const ayer = fechaISO(new Date(Date.now() - 86_400_000));
+    // tamPagina: 1 porque solo interesan los totales del día (total y
+    // total_facturado vienen del período completo, no de la página).
     Promise.all([
-      listarServiciosLavadero({ fechaDesde: hoy, fechaHasta: hoy, todoElPeriodo: true }),
-      listarServiciosLavadero({ fechaDesde: ayer, fechaHasta: ayer, todoElPeriodo: true }),
+      listarServiciosLavadero({ fechaDesde: hoy, fechaHasta: hoy, tamPagina: 1 }),
+      listarServiciosLavadero({ fechaDesde: ayer, fechaHasta: ayer, tamPagina: 1 }),
     ])
       .then(([deHoy, deAyer]) => {
-        const facturado = deHoy.data.reduce((acc, v) => acc + v.precio, 0);
-        const facturadoAyer = deAyer.data.reduce((acc, v) => acc + v.precio, 0);
+        const facturado = deHoy.totalFacturado;
+        const facturadoAyer = deAyer.totalFacturado;
         const variacion =
           facturadoAyer > 0
             ? Math.round(((facturado - facturadoAyer) / facturadoAyer) * 100)
             : null;
-        setResumenHoy({ facturado, lavados: deHoy.data.length, variacion });
+        setResumenHoy({ facturado, lavados: deHoy.total, variacion });
       })
       .catch(() => setResumenHoy({ facturado: 0, lavados: 0, variacion: null }));
   };

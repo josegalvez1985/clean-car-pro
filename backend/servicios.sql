@@ -23,12 +23,16 @@ CREATE OR REPLACE PACKAGE PKG_SERVICIOS_CLEANCAR AS
       p_pagina IN VARCHAR2 DEFAULT NULL, p_tam_pagina IN VARCHAR2 DEFAULT NULL,
       p_todo_periodo IN VARCHAR2 DEFAULT NULL);
   PROCEDURE OBTENER(p_token IN VARCHAR2, p_id IN NUMBER);
+  -- p_hora (HH24:MI) la manda el cliente, no SYSDATE: el servidor puede estar
+  -- en otra zona horaria. Si llega NULL la fila queda a las 00:00.
   PROCEDURE INSERTAR(
       p_token IN VARCHAR2, p_id_box IN NUMBER, p_fecha IN VARCHAR2,
-      p_id_servicio IN NUMBER, p_comentario IN VARCHAR2, p_precio IN NUMBER);
+      p_id_servicio IN NUMBER, p_comentario IN VARCHAR2, p_precio IN NUMBER,
+      p_hora IN VARCHAR2 DEFAULT NULL);
   PROCEDURE ACTUALIZAR(
       p_token IN VARCHAR2, p_id IN NUMBER, p_id_box IN NUMBER, p_fecha IN VARCHAR2,
-      p_id_servicio IN NUMBER, p_comentario IN VARCHAR2, p_precio IN NUMBER);
+      p_id_servicio IN NUMBER, p_comentario IN VARCHAR2, p_precio IN NUMBER,
+      p_hora IN VARCHAR2 DEFAULT NULL);
   PROCEDURE ELIMINAR(p_token IN VARCHAR2, p_id IN NUMBER);
 
 END PKG_SERVICIOS_CLEANCAR;
@@ -107,6 +111,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
     l_pagina      PLS_INTEGER := 1;
     l_tam_pagina  PLS_INTEGER := 30;
     l_total       NUMBER;
+    l_facturado   NUMBER;
   BEGIN
     l_usuario := f_usuario(p_token);
     IF l_usuario IS NULL THEN
@@ -147,7 +152,9 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
       l_tam_pagina := LEAST(GREATEST(TO_NUMBER(p_tam_pagina), 1), 200);
     END IF;
 
-    SELECT COUNT(*) INTO l_total
+    -- total y facturado son del período completo, no de la página: el cliente
+    -- los muestra tal cual (el home no puede sumar lo que no le llegó).
+    SELECT COUNT(*), NVL(SUM(sl.precio), 0) INTO l_total, l_facturado
       FROM servicios_lavadero sl
      WHERE (l_desde IS NULL OR sl.fecha >= l_desde)
        AND (l_hasta IS NULL OR sl.fecha < l_hasta + 1)
@@ -156,6 +163,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
     APEX_JSON.OPEN_OBJECT;
     APEX_JSON.WRITE('success', TRUE);
     APEX_JSON.WRITE('total', l_total);
+    APEX_JSON.WRITE('total_facturado', l_facturado);
     APEX_JSON.OPEN_ARRAY('data');
     FOR r IN (
         SELECT sl.id_servicio_lavadero, sl.id_box, b.descripcion AS box,
@@ -175,6 +183,10 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
       APEX_JSON.WRITE('id_box', r.id_box);
       APEX_JSON.WRITE('box', r.box);
       APEX_JSON.WRITE('fecha', TO_CHAR(r.fecha, 'YYYY-MM-DD'));
+      -- Separada de fecha a propósito: el form de edición y el ticket siguen
+      -- consumiendo 'fecha' como YYYY-MM-DD. Los registros anteriores a este
+      -- cambio se guardaron a las 00:00.
+      APEX_JSON.WRITE('hora', TO_CHAR(r.fecha, 'HH24:MI'));
       APEX_JSON.WRITE('id_servicio', r.id_servicio);
       APEX_JSON.WRITE('servicio', r.servicio);
       APEX_JSON.WRITE('comentario', r.comentario);
@@ -217,6 +229,7 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
     APEX_JSON.WRITE('id_servicio_lavadero', l_row.id_servicio_lavadero);
     APEX_JSON.WRITE('id_box', l_row.id_box);
     APEX_JSON.WRITE('fecha', TO_CHAR(l_row.fecha, 'YYYY-MM-DD'));
+    APEX_JSON.WRITE('hora', TO_CHAR(l_row.fecha, 'HH24:MI'));
     APEX_JSON.WRITE('id_servicio', l_row.id_servicio);
     APEX_JSON.WRITE('comentario', l_row.comentario);
     APEX_JSON.WRITE('precio', l_row.precio);
@@ -232,10 +245,12 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
   --------------------------------------------------------------------------
   PROCEDURE INSERTAR(
       p_token IN VARCHAR2, p_id_box IN NUMBER, p_fecha IN VARCHAR2,
-      p_id_servicio IN NUMBER, p_comentario IN VARCHAR2, p_precio IN NUMBER) IS
+      p_id_servicio IN NUMBER, p_comentario IN VARCHAR2, p_precio IN NUMBER,
+      p_hora IN VARCHAR2 DEFAULT NULL) IS
     l_usuario    VARCHAR2(255);
     l_id         servicios_lavadero.id_servicio_lavadero%TYPE;
     l_comentario servicios_lavadero.comentario%TYPE;
+    l_fecha      DATE;
   BEGIN
     l_usuario := f_usuario(p_token);
     IF l_usuario IS NULL THEN
@@ -261,8 +276,18 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
       END;
     END IF;
 
+    -- La columna es DATE y guarda día + hora. La hora la manda el cliente
+    -- (p_hora) porque el servidor puede estar en otra zona horaria.
+    BEGIN
+      l_fecha := TO_DATE(p_fecha || ' ' || NVL(p_hora, '00:00'), 'YYYY-MM-DD HH24:MI');
+    EXCEPTION
+      WHEN OTHERS THEN
+        p_error(400, 'Bad Request', 'Fecha u hora invalida (usar YYYY-MM-DD y HH24:MI)');
+        RETURN;
+    END;
+
     INSERT INTO servicios_lavadero (id_box, fecha, id_servicio, comentario, precio)
-    VALUES (p_id_box, TO_DATE(p_fecha, 'YYYY-MM-DD'), p_id_servicio, l_comentario, p_precio)
+    VALUES (p_id_box, l_fecha, p_id_servicio, l_comentario, p_precio)
     RETURNING id_servicio_lavadero INTO l_id;
     COMMIT;
 
@@ -287,9 +312,11 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
   --------------------------------------------------------------------------
   PROCEDURE ACTUALIZAR(
       p_token IN VARCHAR2, p_id IN NUMBER, p_id_box IN NUMBER, p_fecha IN VARCHAR2,
-      p_id_servicio IN NUMBER, p_comentario IN VARCHAR2, p_precio IN NUMBER) IS
+      p_id_servicio IN NUMBER, p_comentario IN VARCHAR2, p_precio IN NUMBER,
+      p_hora IN VARCHAR2 DEFAULT NULL) IS
     l_usuario    VARCHAR2(255);
     l_comentario servicios_lavadero.comentario%TYPE;
+    l_fecha      DATE;
   BEGIN
     l_usuario := f_usuario(p_token);
     IF l_usuario IS NULL THEN
@@ -319,9 +346,19 @@ CREATE OR REPLACE PACKAGE BODY PKG_SERVICIOS_CLEANCAR AS
       END;
     END IF;
 
+    BEGIN
+      l_fecha := TO_DATE(p_fecha || ' ' || NVL(p_hora, '00:00'), 'YYYY-MM-DD HH24:MI');
+    EXCEPTION
+      WHEN OTHERS THEN
+        p_error(400, 'Bad Request', 'Fecha u hora invalida (usar YYYY-MM-DD y HH24:MI)');
+        RETURN;
+    END;
+
+    -- El form de edición reenvía la hora que ya tenía la fila, así editar el
+    -- precio no la pisa con 00:00.
     UPDATE servicios_lavadero
        SET id_box      = p_id_box,
-           fecha       = TO_DATE(p_fecha, 'YYYY-MM-DD'),
+           fecha       = l_fecha,
            id_servicio = p_id_servicio,
            comentario  = l_comentario,
            precio      = p_precio
@@ -490,7 +527,8 @@ BEGIN
         p_fecha       => :fecha,
         p_id_servicio => TO_NUMBER(:id_servicio),
         p_comentario  => :comentario,
-        p_precio      => TO_NUMBER(:precio));
+        p_precio      => TO_NUMBER(:precio),
+        p_hora        => :hora);
 END;
 ~');
   ORDS.DEFINE_PARAMETER(p_module_name => 'cleancar.api', p_pattern => 'servicios-lavadero', p_method => 'POST',
@@ -545,7 +583,8 @@ BEGIN
         p_fecha       => :fecha,
         p_id_servicio => TO_NUMBER(:id_servicio),
         p_comentario  => :comentario,
-        p_precio      => TO_NUMBER(:precio));
+        p_precio      => TO_NUMBER(:precio),
+        p_hora        => :hora);
 END;
 ~');
   ORDS.DEFINE_PARAMETER(p_module_name => 'cleancar.api', p_pattern => 'servicios-lavadero/:id', p_method => 'PUT',

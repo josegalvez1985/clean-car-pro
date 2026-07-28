@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SelectorModal } from "@/components/selector-modal";
 import {
   crearServicioLavadero,
+  horaActual,
   listarBoxes,
   listarServicios,
   marcarImpreso,
@@ -107,6 +108,7 @@ export function RegistrarLavado({ onDone }: { onDone?: () => void }) {
         id_box: Number(idBox),
         id_servicio: Number(idServicio),
         fecha,
+        hora: horaActual(),
         comentario: comentarioFinal,
         precio: Number(precio),
       });

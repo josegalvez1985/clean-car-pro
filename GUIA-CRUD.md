@@ -24,15 +24,15 @@ Para cada página nueva hacen falta **tres cosas**. Si falta alguna, pedirla y e
 
 **Qué leer del export** (buscar estas claves):
 
-| Clave en el export | Qué revela |
-| --- | --- |
-| `p_named_lov=>'TABLA.COLUMNA'` | Qué tabla y columna llena cada selector |
-| `p_prompt=>'...'` | La etiqueta visible (¡no inventar!) |
-| `p_is_required=>true` | Campos obligatorios |
-| `p_cMaxlength` | Largo máximo del campo |
-| `create_page_da_action` + `plsql_function_body` | Autocompletados y cálculos |
-| `p_display_as` | Tipo de control (textarea, select, date picker…) |
-| `create_page_button` | Botones extra (imprimir, duplicar…) |
+| Clave en el export                              | Qué revela                                       |
+| ----------------------------------------------- | ------------------------------------------------ |
+| `p_named_lov=>'TABLA.COLUMNA'`                  | Qué tabla y columna llena cada selector          |
+| `p_prompt=>'...'`                               | La etiqueta visible (¡no inventar!)              |
+| `p_is_required=>true`                           | Campos obligatorios                              |
+| `p_cMaxlength`                                  | Largo máximo del campo                           |
+| `create_page_da_action` + `plsql_function_body` | Autocompletados y cálculos                       |
+| `p_display_as`                                  | Tipo de control (textarea, select, date picker…) |
+| `create_page_button`                            | Botones extra (imprimir, duplicar…)              |
 
 Ejemplo real: en la página 14, el bloque
 `select precio into vPrecio from SERVICIOS_LAV where id_servicio = ...` reveló
@@ -94,17 +94,17 @@ END;
 
 3. **El JSON se arma con `APEX_JSON`**, con este contrato fijo:
 
-   | Caso | HTTP | Cuerpo |
-   | --- | --- | --- |
-   | Lista | 200 | `{"success":true,"data":[ {...}, {...} ]}` |
-   | Detalle | 200 | `{"success":true,"data":{...}}` |
-   | Alta | 201 | `{"success":true,"message":"...","id_x":123}` |
-   | Modificación / baja | 200 | `{"success":true,"message":"..."}` |
-   | Sin token | 401 | `{"success":false,"message":"..."}` |
-   | Sin permiso (rol) | 403 | `{"success":false,"message":"..."}` |
-   | Validación | 400 | `{"success":false,"message":"..."}` |
-   | No existe | 404 | `{"success":false,"message":"..."}` |
-   | FK que bloquea | 409 | `{"success":false,"message":"..."}` |
+   | Caso                | HTTP | Cuerpo                                        |
+   | ------------------- | ---- | --------------------------------------------- |
+   | Lista               | 200  | `{"success":true,"data":[ {...}, {...} ]}`    |
+   | Detalle             | 200  | `{"success":true,"data":{...}}`               |
+   | Alta                | 201  | `{"success":true,"message":"...","id_x":123}` |
+   | Modificación / baja | 200  | `{"success":true,"message":"..."}`            |
+   | Sin token           | 401  | `{"success":false,"message":"..."}`           |
+   | Sin permiso (rol)   | 403  | `{"success":false,"message":"..."}`           |
+   | Validación          | 400  | `{"success":false,"message":"..."}`           |
+   | No existe           | 404  | `{"success":false,"message":"..."}`           |
+   | FK que bloquea      | 409  | `{"success":false,"message":"..."}`           |
 
    > No usar `DBMS_XMLGEN.getJSON`: devuelve `{"ROWSET":{"ROW":...}}` y cambia
    > de forma cuando hay una sola fila, lo que obliga a adivinar en el cliente.
@@ -113,7 +113,23 @@ END;
    `RETURNING <pk> INTO l_id`.
 
 5. **Fechas como texto `YYYY-MM-DD`** en ambos sentidos: `TO_DATE(p_fecha,
-   'YYYY-MM-DD')` al entrar, `TO_CHAR(r.fecha, 'YYYY-MM-DD')` al salir.
+'YYYY-MM-DD')` al entrar, `TO_CHAR(r.fecha, 'YYYY-MM-DD')` al salir.
+
+   **Si la columna `DATE` guarda también la hora, la hora la manda el cliente**
+   en un parámetro aparte (`p_hora`, formato `HH24:MI`), nunca `SYSDATE`: el
+   servidor Oracle está en otra zona horaria y la hora saldría corrida. Ver
+   `INSERTAR`/`ACTUALIZAR` en [backend/servicios.sql](backend/servicios.sql):
+
+   ```sql
+   l_fecha := TO_DATE(p_fecha || ' ' || NVL(p_hora, '00:00'), 'YYYY-MM-DD HH24:MI');
+   ```
+
+   De salida va **separada** de la fecha (`TO_CHAR(r.fecha, 'HH24:MI')` en un
+   campo `hora`), así los consumidores que esperan `YYYY-MM-DD` —un
+   `<input type="date">`, el ticket— no se rompen. El parámetro es
+   `DEFAULT NULL` y cae a `00:00`, que es lo que ya tienen las filas viejas.
+   En una edición, el form **reenvía la hora original** de la fila: si mandara
+   solo el día, cambiar el precio pisaría la hora con `00:00`.
 
 6. **Errores de FK traducidos a mensaje entendible**:
 
@@ -152,7 +168,7 @@ END;
    para quien no tiene permiso — es solo UX, la autorización real es el 403
    del backend.
 
-8. **`LISTAR` de una tabla que crece sin límite (movimientos, ventas, logs)
+9. **`LISTAR` de una tabla que crece sin límite (movimientos, ventas, logs)
    nunca trae todo de una.** Paginar con `OFFSET ... FETCH NEXT` y devolver
    `total` junto a `data`, así el cliente sabe si hay más:
 
@@ -176,6 +192,16 @@ END;
    - El `SELECT COUNT(*)` del total usa el mismo `WHERE` que el cursor de la
      página — repetir el filtro, no factorizarlo en una vista: son dos
      sentencias independientes y es más fácil ver que están sincronizadas.
+   - **Todo agregado que la UI muestre (conteo, suma, promedio) viaja en esa
+     misma consulta**, no solo el `COUNT(*)`. Si la pantalla muestra un total
+     facturado, el `SELECT` trae `COUNT(*)` y `NVL(SUM(precio), 0)` juntos:
+
+     ```sql
+     SELECT COUNT(*), NVL(SUM(sl.precio), 0) INTO l_total, l_facturado
+       FROM servicios_lavadero sl
+      WHERE ...;   -- el mismo WHERE del cursor
+     ```
+
    - En el cliente, el botón **"Mostrar más"** pide la página siguiente y
      concatena (`setFilas(prev => [...prev, ...nuevas])`); no reemplaza la
      lista. Ver [src/routes/ventas.tsx](src/routes/ventas.tsx).
@@ -231,12 +257,39 @@ Detalles que evitan errores:
 - `DEFINE_TEMPLATE` también entre `BEGIN/EXCEPTION` por si ya existe.
 - **No** escribir headers CORS a mano con `HTP.P`: los duplica con los que ya
   emite `SET_MODULE_ORIGINS_ALLOWED`. El CORS se maneja solo a nivel de módulo.
+- **`ORDS.DEFINE_MODULE` no acepta `p_origins_allowed`** en la versión de ORDS
+  de esta instancia: pasárselo da `PLS-00306: número o tipos de argumentos
+erróneos`. Los orígenes se cargan **solo** con
+  `ORDS.SET_MODULE_ORIGINS_ALLOWED` (paso 4/5 de
+  [backend/login.sql](backend/login.sql)), que sí lo acepta. Como
+  `delete_module` borra los orígenes, entre recrear el módulo y ese bloque hay
+  una ventana sin CORS — por eso el paso 4/5 no se saltea.
 
 ### 1.4 Ejecutar y probar antes de tocar el front
 
+**`login.sql` va siempre primero.** Todos los paquetes compilan contra
+`CC_AUTH` (`VALIDAR_TOKEN`, `ES_ADMIN`), así que si la base tiene un `CC_AUTH`
+viejo el body falla con `PLS-00302: el componente 'ES_ADMIN' se debe declarar`.
+El error aparece recién cuando se reejecuta el script del dominio, que puede
+ser meses después del commit que introdujo la dependencia:
+
 ```bash
+@backend/login.sql       # SIEMPRE primero
 @backend/<tabla>.sql
 ```
+
+Después de ejecutar, verificar que no quedó nada inválido — un
+`CREATE OR REPLACE` que falla deja el paquete roto y **tumba lo que antes
+funcionaba**:
+
+```sql
+SELECT object_name, object_type, status FROM user_objects
+ WHERE object_type IN ('PACKAGE', 'PACKAGE BODY') AND status = 'INVALID';
+```
+
+Si algo sale `INVALID`, `ALTER PACKAGE <nombre> COMPILE BODY;` y leer
+`user_errors`: muchas veces es solo la invalidación en cascada por haber
+recreado `CC_AUTH` después.
 
 ```bash
 # Debe dar 401 (sin token)
@@ -293,12 +346,19 @@ Reglas:
   que ya agrega el `Authorization: Bearer`, parsea el error y cierra la sesión ante 401/403.
 - **No escribir código defensivo que adivine formatos.** Si el backend cumple el
   contrato, no hace falta.
-- **`LISTAR` paginado** (ver §1.2.8) devuelve `{ data, total }` en vez de
-  `T[]` a secas — el `total` es lo que le permite al cliente decidir si
-  mostrar "Mostrar más". Los filtros van en un objeto con nombres en
+- **`LISTAR` paginado** (ver §1.2.8) devuelve `{ data, total, totalFacturado }`
+  en vez de `T[]` a secas — el `total` es lo que le permite al cliente decidir
+  si mostrar "Mostrar más". Los filtros van en un objeto con nombres en
   camelCase (`fechaDesde`, `idBox`) que la función traduce a query params
   `snake_case` (`fecha_desde`, `id_box`); ver
   `listarServiciosLavadero` en [src/lib/servicios.ts](src/lib/servicios.ts).
+- **Nunca calcular un agregado con `.reduce()` / `.length` sobre la respuesta
+  de un endpoint paginado.** El array es una página, no el conjunto: la suma
+  sale mal y encima cambia sola cuando el usuario toca "Mostrar más". Los
+  totales se leen de la respuesta (§1.2.8). La única excepción es un filtro
+  **local** —el buscador de `useTabla`— donde sí se suma `resultado` porque el
+  backend no conoce ese filtro; ahí la etiqueta tiene que decir "(filtrado)"
+  para que no se lea como el total real.
 
 ---
 
@@ -369,7 +429,7 @@ escribe** (`85.000`), no solo al mostrar en una lista:
 ```tsx
 import { InputMonto } from "@/components/ui/input-monto";
 
-<InputMonto id="precio" value={precio} onChange={setPrecio} placeholder="0" required />
+<InputMonto id="precio" value={precio} onChange={setPrecio} placeholder="0" required />;
 ```
 
 - `value`/`onChange` manejan un string de solo dígitos (`"85000"`), igual que
@@ -394,7 +454,7 @@ defecto**, salvo que el negocio pida lo contrario explícitamente — no agregar
   `NOT NULL` de la tabla sin que lo pida el usuario.
 - El **front** no valida "campo obligatorio" para ese campo, y el placeholder
   aclara qué pasa si se deja vacío (`"...si lo dejás vacío, se usa el nombre
-  del servicio"`).
+del servicio"`).
 - Ojo con Oracle: un `VARCHAR2` vacío (`''`) se trata como `NULL`, así que
   "opcional" y "el backend rellena si es null" son la misma rama de código.
 
@@ -422,29 +482,33 @@ npx eslint <archivos>            # lint
 
 ## 5. Errores ya cometidos — no repetirlos
 
-| Error | Consecuencia | Cómo evitarlo |
-| --- | --- | --- |
-| Escribir el cliente antes que el backend | CORS confuso; rutas inventadas | Backend primero, probado con `curl` |
-| Inventar campos que no están en la tabla | Datos que no se guardan | Solo columnas del DDL |
-| Ignorar el export de APEX | Falta el autocompletado de precio, etiquetas mal | Leerlo antes de empezar |
-| `DBMS_XMLGEN.getJSON` | Formato variable; cliente lleno de parches | `APEX_JSON` con `{success,data}` |
-| Olvidar `DEFINE_PARAMETER` de `Authorization` | 401 con token válido | Uno por método, siempre |
-| Validar el token solo en escritura | Listados abiertos sin sesión | Los cinco procedimientos validan |
-| Suponer que el CORS está mal | Se pierde tiempo en el lugar equivocado | Revisar primero si la ruta existe |
-| Levantar el navegador a probar | Gasto enorme de tokens por poco valor | Entregar código que compila; probar lo hace el usuario |
+| Error                                                      | Consecuencia                                                                            | Cómo evitarlo                                                     |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Escribir el cliente antes que el backend                   | CORS confuso; rutas inventadas                                                          | Backend primero, probado con `curl`                               |
+| Inventar campos que no están en la tabla                   | Datos que no se guardan                                                                 | Solo columnas del DDL                                             |
+| Ignorar el export de APEX                                  | Falta el autocompletado de precio, etiquetas mal                                        | Leerlo antes de empezar                                           |
+| `DBMS_XMLGEN.getJSON`                                      | Formato variable; cliente lleno de parches                                              | `APEX_JSON` con `{success,data}`                                  |
+| Olvidar `DEFINE_PARAMETER` de `Authorization`              | 401 con token válido                                                                    | Uno por método, siempre                                           |
+| Validar el token solo en escritura                         | Listados abiertos sin sesión                                                            | Los cinco procedimientos validan                                  |
+| Suponer que el CORS está mal                               | Se pierde tiempo en el lugar equivocado                                                 | Revisar primero si la ruta existe                                 |
+| Levantar el navegador a probar                             | Gasto enorme de tokens por poco valor                                                   | Entregar código que compila; probar lo hace el usuario            |
+| Sumar con `.reduce()` la respuesta de un endpoint paginado | El total sale mal y cambia solo al paginar (el home mostraba 30 lavados de 42)          | Los agregados los calcula el backend (§1.2.8)                     |
+| Usar `SYSDATE` para la hora de un registro                 | El servidor está en otra zona horaria; la hora sale corrida                             | La hora la manda el cliente en `p_hora` (§1.2.5)                  |
+| Escribir un `.sql` y no ejecutarlo contra la base          | El error queda latente meses y aparece cuando otro cambio obliga a reejecutar el script | Ejecutar y verificar `user_objects` en el momento (§1.4)          |
+| Diagnosticar errores de un script SQL de a uno             | Una iteración por error, con el usuario esperando                                       | Ante el primer error, auditar el script entero antes de responder |
 
 ---
 
 ## 6. Estado actual
 
-| Página APEX | Tabla | Backend | Front |
-| --- | --- | --- | --- |
-| — (login) | `CC_TOKENS` | [backend/login.sql](backend/login.sql) | [src/routes/index.tsx](src/routes/index.tsx) |
-| 1 (home) | `SERVICIOS_LAVADERO` ("Últimos movimientos", Facturado/Lavados/Variación de hoy vs. ayer) | [backend/servicios.sql](backend/servicios.sql) | [src/routes/home.tsx](src/routes/home.tsx) · ocupación de boxes (`RESUMEN.boxes`) sigue con datos de ejemplo — no hay concepto de "lavado en curso" en el modelo |
-| 8 (Box) | `BOX_LAV` | [backend/boxes.sql](backend/boxes.sql) | [src/routes/boxes.tsx](src/routes/boxes.tsx) |
-| 14 (Servicios Lavadero) | `SERVICIOS_LAVADERO` | [backend/servicios.sql](backend/servicios.sql) | [src/components/registrar-lavado.tsx](src/components/registrar-lavado.tsx) + [src/components/ticket-lavado.tsx](src/components/ticket-lavado.tsx) (ticket 57mm, `window.print()`) |
-| 6 y 7 (Servicios) | `SERVICIOS_LAV` | [backend/catalogo-servicios.sql](backend/catalogo-servicios.sql) | [src/routes/servicios.tsx](src/routes/servicios.tsx) |
-| 15 y 16 (Ventas / Ver Ventas) | `SERVICIOS_LAVADERO` | [backend/servicios.sql](backend/servicios.sql) | [src/routes/ventas.tsx](src/routes/ventas.tsx) |
+| Página APEX                   | Tabla                                                                                     | Backend                                                          | Front                                                                                                                                                                                                                                                             |
+| ----------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| — (login)                     | `CC_TOKENS`                                                                               | [backend/login.sql](backend/login.sql)                           | [src/routes/index.tsx](src/routes/index.tsx)                                                                                                                                                                                                                      |
+| 1 (home)                      | `SERVICIOS_LAVADERO` ("Últimos movimientos", Facturado/Lavados/Variación de hoy vs. ayer) | [backend/servicios.sql](backend/servicios.sql)                   | [src/routes/home.tsx](src/routes/home.tsx) · los KPI salen de `total`/`total_facturado` del backend, con `tamPagina: 1` (no se suman filas) · ocupación de boxes (`RESUMEN.boxes`) sigue con datos de ejemplo — no hay concepto de "lavado en curso" en el modelo |
+| 8 (Box)                       | `BOX_LAV`                                                                                 | [backend/boxes.sql](backend/boxes.sql)                           | [src/routes/boxes.tsx](src/routes/boxes.tsx)                                                                                                                                                                                                                      |
+| 14 (Servicios Lavadero)       | `SERVICIOS_LAVADERO`                                                                      | [backend/servicios.sql](backend/servicios.sql)                   | [src/components/registrar-lavado.tsx](src/components/registrar-lavado.tsx) + [src/components/ticket-lavado.tsx](src/components/ticket-lavado.tsx) (ticket 57mm, `window.print()`)                                                                                 |
+| 6 y 7 (Servicios)             | `SERVICIOS_LAV`                                                                           | [backend/catalogo-servicios.sql](backend/catalogo-servicios.sql) | [src/routes/servicios.tsx](src/routes/servicios.tsx)                                                                                                                                                                                                              |
+| 15 y 16 (Ventas / Ver Ventas) | `SERVICIOS_LAVADERO`                                                                      | [backend/servicios.sql](backend/servicios.sql)                   | [src/routes/ventas.tsx](src/routes/ventas.tsx) · abre filtrada en el día actual ("Servicios del día"); vaciar la fecha trae el mes · la lista muestra la **hora**, no la fecha                                                                                    |
 
 **Pendiente de ejecutar en la base**, en este orden:
 
@@ -454,6 +518,9 @@ npx eslint <archivos>            # lint
 @backend/servicios.sql
 @backend/catalogo-servicios.sql
 ```
+
+> `login.sql` primero, siempre: los otros tres no compilan contra un `CC_AUTH`
+> desactualizado (§1.4).
 
 **Pendiente de decidir**:
 

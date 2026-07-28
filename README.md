@@ -55,6 +55,17 @@ el schema de la app (`WKSP_EVAMAR`):
 Cada script es idempotente (`CREATE OR REPLACE` + borra el handler ORDS antes
 de redefinirlo), así que se puede reejecutar sin duplicar nada.
 
+> **El orden importa.** Los tres paquetes CRUD compilan contra `CC_AUTH`
+> (`VALIDAR_TOKEN`, `ES_ADMIN`), así que `login.sql` va primero: con un
+> `CC_AUTH` viejo en la base, el body falla con `PLS-00302` y el
+> `CREATE OR REPLACE` deja el paquete inválido — se cae lo que ya funcionaba.
+> Después de correr los scripts, verificar que no quedó nada roto:
+>
+> ```sql
+> SELECT object_name, object_type, status FROM user_objects
+>  WHERE object_type IN ('PACKAGE', 'PACKAGE BODY') AND status = 'INVALID';
+> ```
+
 La URL base del backend se configura con `VITE_API_URL`:
 
 ```bash
